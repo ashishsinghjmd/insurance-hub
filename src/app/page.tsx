@@ -88,6 +88,10 @@ export default function DashboardPage() {
           </tbody>
         </table>
       </section>
+
+      <div className="portal-footer text-center text-xs text-muted-foreground" style={{ marginTop: 32, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+        Insurance Hub &copy; 2026 &middot; Internal preview build
+      </div>
     </div>
   );
 }
