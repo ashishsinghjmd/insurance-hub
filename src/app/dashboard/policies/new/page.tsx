@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, FormRow, Head, Notice } from "@/components/shell";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+
 import {
   Select,
   SelectContent,
@@ -14,15 +14,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export default function NewClaimPage() {
+export default function NewPolicyPage() {
   const router = useRouter();
   const [saved, setSaved] = useState(false);
   const [form, setForm] = useState({
-    policyId: "",
+    holder: "",
+    email: "",
     type: "",
-    amount: "",
-    incidentDate: "",
-    description: "",
+    coverage: "",
+    premium: "",
+    startDate: "",
   });
 
   const submit = (event: React.FormEvent) => {
@@ -32,36 +33,50 @@ export default function NewClaimPage() {
 
   return (
     <div className="portal-content">
-      <button className="portal-back-link" onClick={() => router.push("/claims")}>
-        <ArrowLeft size={14} /> Back to claims
+      <button className="portal-back-link" onClick={() => router.push("/dashboard/policies")}>
+        <ArrowLeft size={14} /> Back to policies
       </button>
 
       <Head
-        eyebrow="Claims / create"
-        title="File a claim"
-        text="Register a new claim against an existing policy."
+        eyebrow="Policies / create"
+        title="Create a policy"
+        text="Issue a new insurance policy for a policyholder."
       />
 
       {saved && (
         <Notice kind="success">
-          <Check size={14} /> Claim filed successfully.
+          <Check size={14} /> Policy created successfully.
         </Notice>
       )}
 
       <form onSubmit={submit}>
         <section className="portal-card" style={{ maxWidth: 720 }}>
-          <div className="portal-form-divider">Claim details</div>
+          <div className="portal-form-divider">Policyholder</div>
 
           <div className="portal-request-params">
-            <FormRow label="Policy number" hint="The policy this claim is filed against.">
+            <FormRow label="Full name">
               <Input
                 required
-                value={form.policyId}
-                onChange={(e) => setForm({ ...form, policyId: e.target.value })}
-                placeholder="e.g. POL-10342"
+                value={form.holder}
+                onChange={(e) => setForm({ ...form, holder: e.target.value })}
+                placeholder="e.g. John Carter"
               />
             </FormRow>
-            <FormRow label="Claim type">
+            <FormRow label="Email address">
+              <Input
+                required
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="e.g. john@email.com"
+              />
+            </FormRow>
+          </div>
+
+          <div className="portal-form-divider">Coverage</div>
+
+          <div className="portal-request-params">
+            <FormRow label="Policy type">
               <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a type" />
@@ -74,38 +89,37 @@ export default function NewClaimPage() {
                 </SelectContent>
               </Select>
             </FormRow>
-            <FormRow label="Claim amount">
+            <FormRow label="Coverage amount">
               <Input
                 required
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                placeholder="e.g. $4,200"
+                value={form.coverage}
+                onChange={(e) => setForm({ ...form, coverage: e.target.value })}
+                placeholder="e.g. $250,000"
               />
             </FormRow>
-            <FormRow label="Incident date">
+            <FormRow label="Annual premium" hint="Billed annually in advance.">
+              <Input
+                required
+                value={form.premium}
+                onChange={(e) => setForm({ ...form, premium: e.target.value })}
+                placeholder="e.g. $1,240"
+              />
+            </FormRow>
+            <FormRow label="Start date">
               <Input
                 required
                 type="date"
-                value={form.incidentDate}
-                onChange={(e) => setForm({ ...form, incidentDate: e.target.value })}
+                value={form.startDate}
+                onChange={(e) => setForm({ ...form, startDate: e.target.value })}
               />
             </FormRow>
           </div>
 
-          <FormRow label="Description" hint="Describe the incident and what happened.">
-            <Textarea
-              rows={4}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Provide a detailed account of the incident…"
-            />
-          </FormRow>
-
           <div className="portal-btn-row" style={{ marginTop: 16 }}>
             <Button type="submit" variant="default">
-              File claim
+              Create policy
             </Button>
-            <Button type="button" variant="secondary" onClick={() => router.push("/claims")}>
+            <Button type="button" variant="secondary" onClick={() => router.push("/dashboard/policies")}>
               Cancel
             </Button>
           </div>
