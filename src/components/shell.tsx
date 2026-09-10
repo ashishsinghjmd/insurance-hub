@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
   AlertCircle,
+  CreditCard,
   FileText,
   LayoutDashboard,
   LifeBuoy,
@@ -44,12 +45,14 @@ export const nav = [
   { label: "Overview", path: "/", icon: LayoutDashboard, group: "Main" },
   { label: "Policies", path: "/policies", icon: FileText, group: "Main" },
   { label: "Claims", path: "/claims", icon: Activity, group: "Main" },
+  { label: "Make Payment", path: "/make-payment", icon: CreditCard, group: "Payments" },
+  { label: "New Payee", path: "/new-payee", icon: UserPlus, group: "Payee" },
   { label: "New Policy", path: "/policies/new", icon: UserPlus, group: "Actions" },
   { label: "New Claim", path: "/claims/new", icon: ShieldCheck, group: "Actions" },
 ];
 
 function useActiveGroup(path: string) {
-  const groups = ["Main", "Actions"];
+  const groups = ["Main", "Payments", "Payee", "Actions"];
   return groups;
 }
 
