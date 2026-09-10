@@ -29,7 +29,7 @@ const seedPolicies: Policy[] = [
 export default function PoliciesPage() {
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [query, setQuery] = useState("");
-  const [problem, setProblem] = useState("");
+  const [problem] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
