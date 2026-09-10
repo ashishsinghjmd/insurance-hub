@@ -54,7 +54,7 @@ export default function ClaimsPage() {
         title="Claims queue"
         text="Track and process every claim filed against your policies."
         action={
-          <Link href="/claims/new">
+          <Link href="/dashboard/claims/new">
             <Button variant="default">
               <FilePlus2 size={14} /> New Claim
             </Button>

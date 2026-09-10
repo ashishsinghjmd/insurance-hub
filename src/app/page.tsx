@@ -1,97 +1,59 @@
 "use client";
 
-import { ArrowRight, FileText, LifeBuoy, ShieldCheck, TrendingUp } from "lucide-react";
-import { Button, Card, Head, Tag } from "@/components/shell";
+import { ArrowRight, Shield, ShieldCheck, UserPlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-const stats = [
-  { label: "Active Policies", value: "1,234", sub: "+12% this quarter", icon: ShieldCheck },
-  { label: "Pending Claims", value: "56", sub: "-8% this week", icon: FileText },
-  { label: "Total Premiums", value: "$2.4M", sub: "+5% YoY", icon: TrendingUp },
-  { label: "Claims Paid", value: "$890K", sub: "68% of total", icon: LifeBuoy },
-];
-
-const recentPolicies = [
-  { id: "POL-10342", name: "John Carter", type: "Auto", status: "Active", premium: "$1,240/yr" },
-  { id: "POL-10341", name: "Sarah Kim", type: "Home", status: "Active", premium: "$2,100/yr" },
-  { id: "POL-10340", name: "David Lee", type: "Life", status: "Pending", premium: "$890/yr" },
-  { id: "POL-10339", name: "Maria Gomez", type: "Auto", status: "Active", premium: "$1,180/yr" },
-  { id: "POL-10338", name: "James Wong", type: "Health", status: "Lapsed", premium: "$3,400/yr" },
-];
-
-export default function DashboardPage() {
+export default function LandingPage() {
   return (
-    <div className="portal-content">
-      <Head
-        eyebrow="Insurance operations / overview"
-        title="Policy management at a glance."
-        text="Manage policies, track claims, and monitor your portfolio across every customer."
-        action={
-          <Button variant="default" onClick={() => {}}>
-            <ShieldCheck size={14} /> New Policy
-          </Button>
-        }
-      />
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 32px", borderBottom: "1px solid hsl(var(--border))" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))", display: "grid", placeItems: "center" }}>
+            <ShieldCheck size={18} />
+          </div>
+          <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.02em" }}>Insurance Hub</span>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <a href="/auth/login">
+            <Button variant="ghost" size="sm">Log in</Button>
+          </a>
+          <a href="/auth/login">
+            <Button variant="default" size="sm">Sign up</Button>
+          </a>
+        </div>
+      </header>
 
-      <div className="portal-grid portal-grid-4" style={{ marginBottom: 24 }}>
-        {stats.map((stat) => (
-          <Card key={stat.label}>
-            <div className="portal-stat-icon">
-              <stat.icon size={16} />
-            </div>
-            <div className="portal-stat-value">{stat.value}</div>
-            <div className="portal-stat-label">{stat.label}</div>
-            <div className="portal-stat-sub">{stat.sub}</div>
-          </Card>
-        ))}
-      </div>
+      <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "64px 32px" }}>
+        <div style={{ textAlign: "center", maxWidth: 600 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "hsl(var(--primary) / 0.1)", color: "hsl(var(--primary))", borderRadius: 20, padding: "4px 14px", fontSize: 11, fontWeight: 600, marginBottom: 24 }}>
+            <Shield size={12} /> Policy & Claims Platform
+          </div>
+          <h1 style={{ fontSize: "clamp(32px, 5vw, 52px)", fontWeight: 800, letterSpacing: "-0.04em", lineHeight: 1.1, margin: "0 0 16px" }}>
+            Insurance management
+            <br />
+            <span style={{ color: "hsl(var(--primary))" }}>made simple</span>
+          </h1>
+          <p style={{ color: "hsl(var(--muted-foreground))", fontSize: 15, lineHeight: 1.7, maxWidth: 480, margin: "0 auto 32px" }}>
+            Manage policies, track claims, and monitor your portfolio across every customer. Built for insurance operations teams.
+          </p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <a href="/auth/login">
+              <Button variant="default" size="lg">
+                Get started <ArrowRight size={14} />
+              </Button>
+            </a>
+            <a href="/auth/login">
+              <Button variant="outline" size="lg">
+                <UserPlus size={14} /> Create account
+              </Button>
+            </a>
+          </div>
+        </div>
+      </main>
 
-      <div className="portal-section-head">
-        <h2>Recent policies</h2>
-        <Tag variant="primary">5 updated</Tag>
-      </div>
-
-      <section className="portal-card" style={{ padding: 0, overflow: "hidden" }}>
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-border text-left">
-              {["Policy #", "Policyholder", "Type", "Status", "Premium", ""].map((h) => (
-                <th key={h} className="px-4 py-3 text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {recentPolicies.map((p) => (
-              <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
-                <td className="px-4 py-3 font-mono">{p.id}</td>
-                <td className="px-4 py-3 font-semibold">{p.name}</td>
-                <td className="px-4 py-3 text-muted-foreground">{p.type}</td>
-                <td className="px-4 py-3">
-                  <Tag
-                    variant={
-                      p.status === "Active" ? "success" :
-                      p.status === "Pending" ? "warning" : "error"
-                    }
-                  >
-                    {p.status}
-                  </Tag>
-                </td>
-                <td className="px-4 py-3 font-mono">{p.premium}</td>
-                <td className="px-4 py-3 text-right">
-                  <Button variant="ghost" size="sm">
-                    View <ArrowRight size={12} />
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <div className="portal-footer text-center text-xs text-muted-foreground" style={{ marginTop: 32, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+      <footer style={{ padding: "20px 32px", borderTop: "1px solid hsl(var(--border))", textAlign: "center", fontSize: 11, color: "hsl(var(--muted-foreground))" }}>
         Insurance Hub &copy; 2026 &middot; Internal preview build
-      </div>
+      </footer>
     </div>
   );
 }
