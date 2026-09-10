@@ -28,7 +28,7 @@ const seedClaims: Claim[] = [
 export default function ClaimsPage() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [query, setQuery] = useState("");
-  const [problem, setProblem] = useState("");
+  const [problem] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

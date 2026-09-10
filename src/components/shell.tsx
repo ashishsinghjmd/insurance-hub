@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
@@ -9,10 +8,8 @@ import {
   CreditCard,
   FileText,
   LayoutDashboard,
-  LifeBuoy,
   LogOut,
   Menu,
-  Search,
   ShieldCheck,
   UserPlus,
   X,
@@ -51,7 +48,7 @@ export const nav = [
   { label: "New Claim", path: "/claims/new", icon: ShieldCheck, group: "Actions" },
 ];
 
-function useActiveGroup(path: string) {
+function useActiveGroup() {
   const groups = ["Main", "Payments", "Payee", "Actions"];
   return groups;
 }
@@ -81,7 +78,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       ? "Overview"
       : path.split("/").filter(Boolean).pop()?.replace(/-/g, " ") ?? "Insurance Hub";
 
-  const groups = useActiveGroup(path);
+  const groups = useActiveGroup();
 
   return (
     <div className="app-shell">
