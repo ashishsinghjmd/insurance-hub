@@ -5,6 +5,7 @@ import { Calendar, Check, Info, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { juiceFetch } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -22,6 +23,11 @@ const US_STATES = [
   "North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota",
   "Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming",
 ];
+
+const STATE_CODE: Record<string, string> = {
+  Alabama:"AL",Alaska:"AK",Arizona:"AZ",Arkansas:"AR",California:"CA",Colorado:"CO",Connecticut:"CT",Delaware:"DE",Florida:"FL",Georgia:"GA",Hawaii:"HI",Idaho:"ID",Illinois:"IL",Indiana:"IN",Iowa:"IA",Kansas:"KS",Kentucky:"KY",Louisiana:"LA",Maine:"ME",Maryland:"MD",Massachusetts:"MA",Michigan:"MI",Minnesota:"MN",Mississippi:"MS",Missouri:"MO",Montana:"MT",Nebraska:"NE",Nevada:"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND",Ohio:"OH",Oklahoma:"OK",Oregon:"OR",Pennsylvania:"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD",Tennessee:"TN",Texas:"TX",Utah:"UT",Vermont:"VT",Virginia:"VA",Washington:"WA","West Virginia":"WV",Wisconsin:"WI",Wyoming:"WY",
+};
+const COUNTRY_CODE: Record<string, string> = { "United States":"US", Canada:"CA", Mexico:"MX", "United Kingdom":"GB", Australia:"AU" };
 
 type FormState = {
   legalFirstName: string;
@@ -75,10 +81,11 @@ export default function NewPayeePage() {
   const COUNTRIES = ["United States", "Canada", "Mexico", "United Kingdom", "Australia"];
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const update = (patch: Partial<FormState>) => setForm((p) => ({ ...p, ...patch }));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(false);
@@ -95,8 +102,43 @@ export default function NewPayeePage() {
     if (!form.state) return setError("State is required.");
     if (!form.attested) return setError("You must attest that the information is correct.");
 
-    setSuccess(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setSubmitting(true);
+    try {
+      const countryCode = COUNTRY_CODE[form.country] || "US";
+      const isUS = countryCode === "US";
+      const payload = {
+        firstName: form.legalFirstName.trim(),
+        lastName: form.legalLastName.trim(),
+        middleName: form.middleName.trim(),
+        surName: form.secondSurname.trim(),
+        email: form.email.trim(),
+        dateOfBirth: form.dob,
+        phone: form.phone.replace(/\D/g, ""),
+        docId: form.documentId.replace(/\D/g, "") || "123456789",
+        docType: "SSN",
+        addressLine1: form.address.trim(),
+        aptSuite: form.aptSuite.trim(),
+        city: form.city.trim(),
+        state: isUS ? (STATE_CODE[form.state] || form.state) : form.state,
+        zip: form.zipCode.trim(),
+        country: countryCode,
+        isInternational: !isUS,
+        agreeTerms: form.attested,
+        subscribeToEmails: true,
+        isReceiveSms: false,
+      };
+      const res = await juiceFetch("/v1/insurance/invite", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setSuccess(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save payee");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const inputClass =
@@ -360,10 +402,11 @@ export default function NewPayeePage() {
             <div className="flex justify-end pt-2">
               <Button
                 type="submit"
+                disabled={submitting}
                 className="h-[36px] rounded-[8px] bg-[#6aa8ff] hover:bg-[#4d95ff] active:bg-[#3d8aff] text-white text-[12.5px] font-semibold px-5 gap-1.5 shadow-sm"
               >
                 <UserPlus size={14} className="text-white" />
-                Save Payee
+                {submitting ? "Saving..." : "Save Payee"}
               </Button>
             </div>
           </form>
