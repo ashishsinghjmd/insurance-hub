@@ -28,7 +28,7 @@ const seedClaims: Claim[] = [
 export default function ClaimsPage() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [query, setQuery] = useState("");
-  const [problem, setProblem] = useState("");
+  const [problem] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function ClaimsPage() {
         title="Claims queue"
         text="Track and process every claim filed against your policies."
         action={
-          <Link href="/claims/new">
+          <Link href="/dashboard/claims/new">
             <Button variant="default">
               <FilePlus2 size={14} /> New Claim
             </Button>

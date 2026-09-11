@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, FormRow, Head, Notice } from "@/components/shell";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
 import {
   Select,
   SelectContent,
@@ -33,7 +33,7 @@ export default function NewPolicyPage() {
 
   return (
     <div className="portal-content">
-      <button className="portal-back-link" onClick={() => router.push("/policies")}>
+      <button className="portal-back-link" onClick={() => router.push("/dashboard/policies")}>
         <ArrowLeft size={14} /> Back to policies
       </button>
 
@@ -119,7 +119,7 @@ export default function NewPolicyPage() {
             <Button type="submit" variant="default">
               Create policy
             </Button>
-            <Button type="button" variant="secondary" onClick={() => router.push("/policies")}>
+            <Button type="button" variant="secondary" onClick={() => router.push("/dashboard/policies")}>
               Cancel
             </Button>
           </div>

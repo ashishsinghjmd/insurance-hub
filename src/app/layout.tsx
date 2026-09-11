@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
-import { Shell } from "@/components/shell";
 import "./globals.css";
 import "./portal.css";
 
@@ -19,7 +18,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           enableSystem
           disableTransitionOnChange
         >
-          <Shell>{children}</Shell>
+          {children}
         </ThemeProvider>
       </body>
     </html>

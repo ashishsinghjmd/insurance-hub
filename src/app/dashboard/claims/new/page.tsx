@@ -274,12 +274,7 @@ export default function NewClaimPage() {
 
   return (
     <div className="portal-content">
-      {/* Back button */}
-      <button
-        className="portal-back-link"
-        onClick={() => router.push("/claims")}
-        aria-label="Back to claims"
-      >
+      <button className="portal-back-link" onClick={() => router.push("/dashboard/claims")}>
         <ArrowLeft size={14} /> Back to claims
       </button>
 
@@ -330,203 +325,16 @@ export default function NewClaimPage() {
               </div>
             </div>
 
-            {/* Contact Information Section */}
-            <div>
-              <h2 className="text-base font-semibold text-foreground mb-4">
-                Contact Information
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {CLAIM_FORM_FIELDS.filter(
-                  (f) => ["email", "phone", "dateOfBirth"].includes(f.id)
-                ).map((field) => (
-                  <div key={field.id}>
-                    <ClaimFormField
-                      field={field}
-                      control={control as any}
-                      name={(field.id as any) as never}
-                      error={
-                        errors[field.id as keyof ClaimFormData]?.message as
-                          | string
-                          | undefined
-                      }
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Policy Information Section */}
-            <div>
-              <h2 className="text-base font-semibold text-foreground mb-4">
-                Policy Information
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {CLAIM_FORM_FIELDS.filter(
-                  (f) => ["policyId", "type"].includes(f.id)
-                ).map((field) => (
-                  <div key={field.id}>
-                    <ClaimFormField
-                      field={field}
-                      control={control as any}
-                      name={(field.id as any) as never}
-                      error={
-                        errors[field.id as keyof ClaimFormData]?.message as
-                          | string
-                          | undefined
-                      }
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Incident Information Section */}
-            <div>
-              <h2 className="text-base font-semibold text-foreground mb-4">
-                Incident Information
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {CLAIM_FORM_FIELDS.filter(
-                  (f) => ["incidentDate", "amount"].includes(f.id)
-                ).map((field) => (
-                  <div key={field.id}>
-                    <ClaimFormField
-                      field={field}
-                      control={control as any}
-                      name={(field.id as any) as never}
-                      error={
-                        errors[field.id as keyof ClaimFormData]?.message as
-                          | string
-                          | undefined
-                      }
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Address Information Section */}
-            <div>
-              <h2 className="text-base font-semibold text-foreground mb-4">
-                Address
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {CLAIM_FORM_FIELDS.filter(
-                  (f) => ["address", "aptSuite", "zipCode", "city", "state"].includes(f.id)
-                ).map((field) => (
-                  <div
-                    key={field.id}
-                    className={field.id === "address" ? "md:col-span-2" : ""}
-                  >
-                    <ClaimFormField
-                      field={field}
-                      control={control as any}
-                      name={(field.id as any) as never}
-                      error={
-                        errors[field.id as keyof ClaimFormData]?.message as
-                          | string
-                          | undefined
-                      }
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Claim Description Section */}
-            <div>
-              <div>
-                {CLAIM_FORM_FIELDS.filter(
-                  (f) => f.id === "description"
-                ).map((field) => (
-                  <div key={field.id}>
-                    <ClaimFormField
-                      field={field}
-                      control={control as any}
-                      name={(field.id as any) as never}
-                      error={
-                        errors[field.id as keyof ClaimFormData]?.message as
-                          | string
-                          | undefined
-                      }
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Terms & Conditions Section */}
-            <div>
-              {CLAIM_FORM_FIELDS.filter(
-                (f) => f.id === "terms"
-              ).map((field) => (
-                <div key={field.id}>
-                  <ClaimFormField
-                    field={field}
-                    control={control as any}
-                    name={(field.id as any) as never}
-                    error={
-                      errors[field.id as keyof ClaimFormData]?.message as
-                        | string
-                        | undefined
-                    }
-                    disabled={isSubmitting}
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Information box (juice-pro style) */}
-            <div className="flex gap-3 p-4 rounded-lg bg-blue-50 border border-blue-200">
-              <div className="flex-shrink-0 pt-0.5">
-                <Info className="h-4 w-4 text-blue-600" />
-              </div>
-              <div className="space-y-2 flex-1">
-                <p className="text-sm font-semibold text-blue-900">
-                  Important Information
-                </p>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• All information provided will be used to process your claim.</li>
-                  <li>• Please ensure all details are accurate and complete to avoid delays.</li>
-                  <li>• You will receive a confirmation email with your claim reference number.</li>
-                  <li>• Typical processing time is 5-10 business days.</li>
-                </ul>
-              </div>
-            </div>
-
-            {/* Action buttons (juice-pro style) */}
-            <div className="flex gap-3 pt-4">
-              <DSButton
-                type="submit"
-                disabled={isSubmitting || !isValid}
-                className="min-w-fit"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Filing claim…
-                  </>
-                ) : (
-                  "File Claim"
-                )}
-              </DSButton>
-              <DSButton
-                type="button"
-                variant="secondary"
-                onClick={() => router.push("/claims")}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </DSButton>
-            </div>
-          </form>
-        </CardContent>
-      </DSCard>
+          <div className="portal-btn-row" style={{ marginTop: 16 }}>
+            <Button type="submit" variant="default">
+              File claim
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => router.push("/dashboard/claims")}>
+              Cancel
+            </Button>
+          </div>
+        </section>
+      </form>
     </div>
   );
 }
