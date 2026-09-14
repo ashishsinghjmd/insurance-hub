@@ -42,17 +42,17 @@ import { useRoles } from "@/hooks/use-role";
 export { Badge, Label, Skeleton };
 
 const baseNav = [
-  { label: "Overview", path: "/dashboard", icon: LayoutDashboard, group: "Main" },
-  { label: "Policies", path: "/dashboard/policies", icon: FileText, group: "Main" },
-  { label: "Claims", path: "/dashboard/claims", icon: Activity, group: "Main" },
-  { label: "Make Payment", path: "/dashboard/make-payment", icon: CreditCard, group: "Payments" },
-  { label: "New Payee", path: "/dashboard/new-payee", icon: UserPlus, group: "Payee" },
-  { label: "New Policy", path: "/dashboard/policies/new", icon: UserPlus, group: "Actions" },
-  { label: "New Claim", path: "/dashboard/claims/new", icon: ShieldCheck, group: "Actions" },
+  { label: "Overview", path: "/overview", icon: LayoutDashboard, group: "Main" },
+  { label: "Policies", path: "/policies", icon: FileText, group: "Main" },
+  { label: "Claims", path: "/claims", icon: Activity, group: "Main" },
+  { label: "Make Payment", path: "/make-payment", icon: CreditCard, group: "Payments" },
+  { label: "New Payee", path: "/new-payee", icon: UserPlus, group: "Payee" },
+  { label: "New Policy", path: "/policies/new", icon: UserPlus, group: "Actions" },
+  { label: "New Claim", path: "/claims/new", icon: ShieldCheck, group: "Actions" },
 ];
 
 const adminNav = [
-  { label: "User Management", path: "/dashboard/user-management", icon: Users, group: "Admin" },
+  { label: "User Management", path: "/user-management", icon: Users, group: "Admin" },
 ];
 
 function useActiveGroup() {
@@ -85,7 +85,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   };
 
   const pageName =
-    path === "/dashboard"
+    path === "/overview"
       ? "Overview"
       : path.split("/").filter(Boolean).pop()?.replace(/-/g, " ") ?? "Insurance Hub";
 
@@ -197,7 +197,7 @@ function NavItem({
   current: string;
   onClick: () => void;
 }) {
-  const isActive = current === path || (path !== "/dashboard" && current.startsWith(path));
+  const isActive = current === path || (path !== "/overview" && current.startsWith(path));
   return (
     <button
       className={`portal-nav-item ${isActive ? "active" : ""}`}

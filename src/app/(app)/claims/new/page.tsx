@@ -66,7 +66,7 @@ export default function NewClaimPage() {
 
   return (
     <div className="portal-content">
-      <button className="portal-back-link" onClick={() => router.push("/dashboard/claims")}>
+      <button className="portal-back-link" onClick={() => router.push("/claims")}>
         <ArrowLeft size={14} /> Back to claims
       </button>
 
@@ -140,7 +140,7 @@ export default function NewClaimPage() {
             <Button type="submit" variant="default" disabled={submitting}>
               {submitting ? "Filing..." : "File claim"}
             </Button>
-            <Button type="button" variant="secondary" onClick={() => router.push("/dashboard/claims")}>
+            <Button type="button" variant="secondary" onClick={() => router.push("/claims")}>
               Cancel
             </Button>
           </div>

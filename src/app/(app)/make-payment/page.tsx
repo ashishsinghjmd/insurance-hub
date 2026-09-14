@@ -163,7 +163,7 @@ export default function MakePaymentPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push("/dashboard/new-payee")}
+              onClick={() => router.push("/new-payee")}
               className="h-8 rounded-[8px] border-[#017BFD] text-[#017BFD] hover:bg-[#eaf1ff] hover:text-[#017BFD] bg-white text-xs font-semibold gap-1.5 px-3"
             >
               <UserPlus size={14} className="text-[#017BFD]" />
