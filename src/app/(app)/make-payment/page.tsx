@@ -268,8 +268,20 @@ export default function MakePaymentPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(await res.text());
+      let paymentId = "1797";
+      try {
+        const body = await res.clone().json();
+        const raw: any = body?.data ?? body;
+        paymentId = String(raw?.paymentId ?? raw?.payment ?? raw?.id ?? raw?.payment_id ?? paymentId);
+      } catch {
+        // keep default and also cache payload so confirm can show it without API
+      }
+      try {
+        sessionStorage.setItem(`insurance:confirm:${paymentId}`, JSON.stringify({ ...payload, paymentId }));
+        sessionStorage.setItem("insurance:last-payment", paymentId);
+      } catch {}
       setSuccess(true);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      router.push(`/insurance/confirm?payment=${encodeURIComponent(paymentId)}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to create payment");
     } finally {
