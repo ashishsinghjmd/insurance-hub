@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+/* eslint-disable react-hooks/set-state-in-effect -- rpid sync from URL is intentional (mirrors juice-pro GenericHubInviteForm -> HubForm rpidParam flow) */
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
   Info,
@@ -51,6 +52,8 @@ const PAYMENT_METHODS = [
 
 export default function MakePaymentPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rpidParam = searchParams.get("rpid");
   const [payeeQuery, setPayeeQuery] = useState("");
   const [selectedPayee, setSelectedPayee] = useState<Payee | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -66,6 +69,23 @@ export default function MakePaymentPage() {
 
   // new payee form
   const [newPayee, setNewPayee] = useState({ name: "", email: "", phone: "" });
+
+  useEffect(() => {
+    if (!rpidParam) return;
+    const decoded = decodeURIComponent(rpidParam).trim();
+    if (!decoded) return;
+    const found = MOCK_PAYEES.find((p) => p.id === decoded || p.id.toLowerCase() === decoded.toLowerCase());
+    if (found) {
+      setSelectedPayee(found);
+      setPayeeQuery(found.name);
+      setEmail(found.email);
+      setMobilePhone(found.phone);
+    } else {
+      const synthetic: Payee = { id: decoded, name: decoded, email: "", phone: "" };
+      setSelectedPayee(synthetic);
+      setPayeeQuery(decoded);
+    }
+  }, [rpidParam]);
 
   const filteredPayees = useMemo(() => {
     if (!payeeQuery.trim()) return MOCK_PAYEES;
@@ -134,8 +154,17 @@ export default function MakePaymentPage() {
 
   return (
     <div className="portal-content">
-      {/* Header outside card? Screenshot shows card contains header, but we mimic */}
       <div className="mx-auto max-w-[880px]">
+        {rpidParam && selectedPayee && (
+          <div className="mb-4">
+            <Notice kind="success">
+              <span className="flex items-center gap-2">
+                <Check size={14} className="text-[hsl(var(--chart-2))]" />
+                Payee <b>{selectedPayee.name}</b> ({selectedPayee.id}) pre-selected from New Payee.
+              </span>
+            </Notice>
+          </div>
+        )}
         {success && (
           <div className="mb-4">
             <Notice kind="success">
