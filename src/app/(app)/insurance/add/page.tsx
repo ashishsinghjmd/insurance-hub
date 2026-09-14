@@ -86,6 +86,38 @@ function toYMD(dateStr: string): string {
   return datePart.slice(0, 10);
 }
 
+function getApiErrorMessage(raw: string, fallback = "Request failed"): string {
+  if (!raw) return fallback;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return fallback;
+  try {
+    const j = JSON.parse(trimmed);
+    if (typeof j === "string" && j.trim()) return j.trim();
+    if (j && typeof j === "object") {
+      const candidate =
+        (j as Record<string, unknown>).message ??
+        (j as Record<string, unknown>).msg ??
+        (j as Record<string, unknown>).detail ??
+        (j as Record<string, unknown>).error ??
+        (j as Record<string, unknown>).errors;
+      if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+      if (candidate && typeof candidate === "object") {
+        const nested = (candidate as Record<string, unknown>).message ?? (candidate as Record<string, unknown>).msg;
+        if (typeof nested === "string" && nested.trim()) return nested.trim();
+      }
+      // common: { data: { message } }
+      const data = (j as Record<string, unknown>).data;
+      if (data && typeof data === "object") {
+        const dm = (data as Record<string, unknown>).message ?? (data as Record<string, unknown>).msg;
+        if (typeof dm === "string" && dm.trim()) return dm.trim();
+      }
+    }
+  } catch {
+    // not JSON, return raw
+  }
+  return trimmed;
+}
+
 function MakePaymentInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -449,34 +481,10 @@ function MakePaymentInner() {
         });
         return { res: r, payload: p };
       };
-      let { res, payload: finalPayload } = await submitWithRef(payload.referenceNumber as string);
+      const { res, payload: finalPayload } = await submitWithRef(payload.referenceNumber as string);
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText);
-        // Handle duplicate reference number - generate unique and retry once (mirrors HubForm checkReferenceNumberAvailable)
-        let isDuplicate = false;
-        try {
-          const j = JSON.parse(errText);
-          isDuplicate = j?.error?.code === "DUPLICATE_REFERENCE_NUMBER" || j?.code === "DUPLICATE_REFERENCE_NUMBER";
-        } catch {
-          isDuplicate = errText.includes("DUPLICATE_REFERENCE_NUMBER") || errText.toLowerCase().includes("reference number already exists");
-        }
-        if (isDuplicate && !isUpdate) {
-          const baseRef = String(payload.referenceNumber).trim().split("-")[0] || "REF";
-          const newRef = `${baseRef}-${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 4)}`.toUpperCase();
-          setReferenceNumber(newRef);
-          const retry = await submitWithRef(newRef);
-          if (!retry.res.ok) {
-            const retryText = await retry.res.text().catch(() => retry.res.statusText);
-            throw new Error(retryText);
-          }
-          // use retry result
-          res = retry.res;
-          finalPayload = retry.payload;
-          // update payload reference for cache
-          (payload as any).referenceNumber = newRef;
-        } else {
-          throw new Error(errText);
-        }
+        throw new Error(getApiErrorMessage(errText, res.statusText || "Failed to create payment"));
       }
       let paymentId = isUpdate ? String(entityParam) : "1797";
       try {
@@ -499,7 +507,8 @@ function MakePaymentInner() {
       // Direct push as well for immediate UX (mirrors HubForm's useEffect will also push)
       router.push(`/insurance/confirm?payment=${encodeURIComponent(paymentId)}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : `Failed to ${isEdit ? "update" : "create"} payment`);
+      const rawMsg = err instanceof Error ? err.message : `Failed to ${isEdit ? "update" : "create"} payment`;
+      setError(getApiErrorMessage(rawMsg, rawMsg));
     } finally {
       setSubmitting(false);
     }
