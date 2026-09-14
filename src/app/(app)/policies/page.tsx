@@ -55,7 +55,7 @@ export default function PoliciesPage() {
         title="Policy portfolio"
         text="Browse and manage every insurance policy in your book of business."
         action={
-          <Link href="/dashboard/policies/new">
+          <Link href="/policies/new">
             <Button variant="default">
               <FilePlus2 size={14} /> New Policy
             </Button>
