@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-typecheck-test:
+    runs-on: ubuntu-latest
+    env:
+      AUTH0_SECRET: "ci-test-secret-at-least-32-chars-long!!"
+      AUTH0_DOMAIN: "test.auth0.com"
+      AUTH0_CLIENT_ID: "test-client-id"
+      AUTH0_CLIENT_SECRET: "test-client-secret"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build

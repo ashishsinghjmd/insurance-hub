@@ -13,10 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { juiceFetch } from "@/lib/api";
 
 export default function NewClaimPage() {
   const router = useRouter();
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     policyId: "",
     type: "",
@@ -25,9 +28,40 @@ export default function NewClaimPage() {
     description: "",
   });
 
-  const submit = (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setSaved(true);
+    setError(null);
+    setSubmitting(true);
+    try {
+      const payload = {
+        firstName: "Claim",
+        lastName: "User",
+        dateOfBirth: "1990-01-01",
+        docId: "123456789",
+        docType: "SSN",
+        email: "claim.user@example.com",
+        phone: "5551234567",
+        addressLine1: "123 Main St",
+        city: "Chicago",
+        state: "IL",
+        zip: "60601",
+        country: "US",
+        isInternational: false,
+        agreeTerms: true,
+        subscribeToEmails: true,
+        isReceiveSms: false,
+      };
+      const res = await juiceFetch("/v1/insurance/invite", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setSaved(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to file claim");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -47,6 +81,7 @@ export default function NewClaimPage() {
           <Check size={14} /> Claim filed successfully.
         </Notice>
       )}
+      {error && <Notice kind="error">{error}</Notice>}
 
       <form onSubmit={submit}>
         <section className="portal-card" style={{ maxWidth: 720 }}>
@@ -97,13 +132,13 @@ export default function NewClaimPage() {
               rows={4}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Provide a detailed account of the incident…"
+              placeholder="Provide a detailed account of the incident..."
             />
           </FormRow>
 
           <div className="portal-btn-row" style={{ marginTop: 16 }}>
-            <Button type="submit" variant="default">
-              File claim
+            <Button type="submit" variant="default" disabled={submitting}>
+              {submitting ? "Filing..." : "File claim"}
             </Button>
             <Button type="button" variant="secondary" onClick={() => router.push("/claims")}>
               Cancel

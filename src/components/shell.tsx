@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
@@ -9,12 +8,11 @@ import {
   CreditCard,
   FileText,
   LayoutDashboard,
-  LifeBuoy,
   LogOut,
   Menu,
-  Search,
   ShieldCheck,
   UserPlus,
+  Users,
   X,
 } from "lucide-react";
 
@@ -38,11 +36,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useUser } from "@auth0/nextjs-auth0";
+import { useRoles } from "@/hooks/use-role";
 
 export { Badge, Label, Skeleton };
 
-export const nav = [
-  { label: "Overview", path: "/", icon: LayoutDashboard, group: "Main" },
+const baseNav = [
+  { label: "Overview", path: "/overview", icon: LayoutDashboard, group: "Main" },
   { label: "Policies", path: "/policies", icon: FileText, group: "Main" },
   { label: "Claims", path: "/claims", icon: Activity, group: "Main" },
   { label: "Make Payment", path: "/make-payment", icon: CreditCard, group: "Payments" },
@@ -51,8 +51,12 @@ export const nav = [
   { label: "New Claim", path: "/claims/new", icon: ShieldCheck, group: "Actions" },
 ];
 
-function useActiveGroup(path: string) {
-  const groups = ["Main", "Payments", "Payee", "Actions"];
+const adminNav = [
+  { label: "User Management", path: "/user-management", icon: Users, group: "Admin" },
+];
+
+function useActiveGroup() {
+  const groups = ["Main", "Payments", "Payee", "Actions", "Admin"];
   return groups;
 }
 
@@ -60,6 +64,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const path = usePathname();
   const [mobile, setMobile] = useState(false);
+  const { user } = useUser();
+  const { role } = useRoles();
+
+  const nav = role === "Admin" ? [...baseNav, ...adminNav] : baseNav;
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -77,11 +85,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
   };
 
   const pageName =
-    path === "/"
+    path === "/overview"
       ? "Overview"
       : path.split("/").filter(Boolean).pop()?.replace(/-/g, " ") ?? "Insurance Hub";
 
-  const groups = useActiveGroup(path);
+  const groups = useActiveGroup().filter(
+    (g) => g !== "Admin" || role === "Admin",
+  );
 
   return (
     <div className="app-shell">
@@ -130,20 +140,25 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         <div className="portal-sidebar-footer">
           <div className="portal-user-card">
-            <div className="portal-user-avatar">IH</div>
+            <div className="portal-user-avatar">
+              {user?.picture ? (
+                <img src={user.picture} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+              ) : (
+                role === "Admin" ? "AD" : "U"
+              )}
+            </div>
             <div className="portal-user-meta">
-              <div className="portal-user-name">Insurance User</div>
+              <div className="portal-user-name">
+                {user?.name ?? (role === "Admin" ? "Admin User" : "User")}
+              </div>
               <div className="portal-user-role">
-                <span className="portal-status-dot" /> Active session
+                <span className="portal-status-dot" /> {role}
               </div>
             </div>
           </div>
-          <button
-            className="portal-signout"
-            onClick={() => router.push("/")}
-          >
+          <a href="/auth/logout" className="portal-signout">
             <LogOut size={13} /> Sign out
-          </button>
+          </a>
         </div>
       </aside>
 
@@ -182,7 +197,7 @@ function NavItem({
   current: string;
   onClick: () => void;
 }) {
-  const isActive = current === path || (path !== "/" && current.startsWith(path));
+  const isActive = current === path || (path !== "/overview" && current.startsWith(path));
   return (
     <button
       className={`portal-nav-item ${isActive ? "active" : ""}`}
