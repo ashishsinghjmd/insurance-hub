@@ -44,6 +44,43 @@ const FALLBACK_PAYMENT_METHODS = [
   "Check",
 ] as const;
 
+const MOCK_PAYEES: Payee[] = [
+  { id: "RPID-8821", name: "John Carter", email: "john.carter@email.com", phone: "201-555-0123" },
+  { id: "RPID-8822", name: "Sarah Kim", email: "sarah.kim@email.com", phone: "415-555-0199" },
+  { id: "RPID-8823", name: "David Lee", email: "david.lee@email.com", phone: "312-555-0142" },
+  { id: "RPID-8824", name: "Maria Gomez", email: "maria.gomez@email.com", phone: "713-555-0176" },
+  { id: "RPID-8825", name: "James Wong", email: "james.wong@email.com", phone: "206-555-0188" },
+];
+
+const PAYEES_CACHE_KEY = "insurance-hub:cardholder-payees";
+const PAYEES_CACHE_TTL_MS = 5 * 60 * 1000;
+const METHODS_CACHE_KEY = "insurance-hub:payment-methods";
+const METHODS_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function readCache<T>(key: string, ttl: number): T | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { at: number; data: T };
+    if (Date.now() - parsed.at > ttl) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+function writeCache<T>(key: string, data: T) {
+  try {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data }));
+  } catch {
+    // ignore quota
+  }
+}
+
 export default function MakePaymentPage() {
   const router = useRouter();
   const [payeeQuery, setPayeeQuery] = useState("");
@@ -70,16 +107,33 @@ export default function MakePaymentPage() {
   const [payeesLoading, setPayeesLoading] = useState(true);
   const [payeesError, setPayeesError] = useState<string | null>(null);
 
-  const loadPayees = async () => {
+  const loadPayees = async (force = false) => {
     setPayeesLoading(true);
     setPayeesError(null);
     try {
+      if (!force) {
+        const cached = readCache<Payee[]>(PAYEES_CACHE_KEY, PAYEES_CACHE_TTL_MS);
+        if (cached && cached.length) {
+          setPayees(cached);
+          setPayeesLoading(false);
+          return;
+        }
+      }
       const res = await juiceFetch("/v1/insurance/cardholder");
       if (!res.ok) throw new Error(await res.text());
       const body = await res.json();
-      setPayees(body?.data?.payees ?? []);
+      const fetched: Payee[] = Array.isArray(body?.data?.payees) ? body.data.payees : [];
+      if (fetched.length) {
+        setPayees(fetched);
+        writeCache(PAYEES_CACHE_KEY, fetched);
+      } else {
+        throw new Error("Empty payees response");
+      }
     } catch (err: unknown) {
       setPayeesError(err instanceof Error ? err.message : "Failed to load payees");
+      const cached = readCache<Payee[]>(PAYEES_CACHE_KEY, PAYEES_CACHE_TTL_MS);
+      if (cached && cached.length) setPayees(cached);
+      else setPayees(MOCK_PAYEES);
     } finally {
       setPayeesLoading(false);
     }
@@ -95,6 +149,12 @@ export default function MakePaymentPage() {
       setMethodsLoading(true);
       setMethodsError(null);
       try {
+        const cached = readCache<string[]>(METHODS_CACHE_KEY, METHODS_CACHE_TTL_MS);
+        if (cached && cached.length && !cancelled) {
+          setPaymentMethods(cached);
+          setMethodsLoading(false);
+          return;
+        }
         const res = await juiceFetch("/v1/payment-methods?includeOrgOptIn=true", {
           method: "GET",
         });
@@ -119,12 +179,17 @@ export default function MakePaymentPage() {
             return "";
           })
           .filter(Boolean) as string[];
-        if (!cancelled && normalized.length) setPaymentMethods(normalized);
+        if (!cancelled && normalized.length) {
+          setPaymentMethods(normalized);
+          writeCache(METHODS_CACHE_KEY, normalized);
+        }
         if (!cancelled && !normalized.length) throw new Error("Empty payment methods");
       } catch (e) {
         if (!cancelled) {
           setMethodsError(e instanceof Error ? e.message : "Failed to load payment methods");
-          setPaymentMethods([...FALLBACK_PAYMENT_METHODS]);
+          const cached = readCache<string[]>(METHODS_CACHE_KEY, METHODS_CACHE_TTL_MS);
+          if (cached && cached.length) setPaymentMethods(cached);
+          else setPaymentMethods([...FALLBACK_PAYMENT_METHODS]);
         }
       } finally {
         if (!cancelled) setMethodsLoading(false);
@@ -367,7 +432,7 @@ export default function MakePaymentPage() {
                   <Info size={10} className="h-2.5 w-2.5" />
                 </span>
               </Label>
-              <div className="flex h-[42px] w-full items-center rounded-[12px] border border-[#eef2f7] bg-white px-3.5 text-sm shadow-sm focus-within:border-[#017BFD] focus-within:ring-1 focus-within:ring-[#017BFD]/20">
+              <div className={`flex h-[42px] w-full items-center rounded-[12px] border px-3.5 text-sm shadow-sm ${selectedPayee ? "border-[#eef2f7] bg-[#e8ecf3]" : "border-[#eef2f7] bg-white focus-within:border-[#017BFD] focus-within:ring-1 focus-within:ring-[#017BFD]/20"}`}>
                 <span className="mr-2.5 flex items-center gap-1.5 shrink-0 select-none">
                   <span className="text-[16px] leading-none">🇺🇸</span>
                   <span className="text-[13px] font-medium text-[#0f172a]">+1</span>
@@ -376,10 +441,15 @@ export default function MakePaymentPage() {
                   value={mobilePhone}
                   onChange={(e) => setMobilePhone(e.target.value)}
                   placeholder="201-555-0123"
-                  className="flex-1 bg-transparent outline-none placeholder:text-[#b8c0cf] text-[13px] text-[#0f172a]"
+                  readOnly={!!selectedPayee}
+                  disabled={!!selectedPayee}
+                  className={`flex-1 bg-transparent outline-none placeholder:text-[#b8c0cf] text-[13px] ${selectedPayee ? "text-[#334155] cursor-not-allowed" : "text-[#0f172a]"}`}
                   inputMode="tel"
                 />
               </div>
+              {selectedPayee && (
+                <p className="text-[11px] text-[#64748b]">Auto-filled from selected payee — clear payee to edit.</p>
+              )}
             </div>
 
             {/* Amount */}
