@@ -95,6 +95,7 @@ export default function MakePaymentPage() {
   const [newPayeeOpen, setNewPayeeOpen] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([...FALLBACK_PAYMENT_METHODS]);
   const [methodsLoading, setMethodsLoading] = useState(true);
   const [methodsError, setMethodsError] = useState<string | null>(null);
@@ -224,7 +225,7 @@ export default function MakePaymentPage() {
     setMobilePhone("");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(false);
@@ -248,8 +249,32 @@ export default function MakePaymentPage() {
       setError("Please select a Payment Method.");
       return;
     }
-    setSuccess(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setSubmitting(true);
+    try {
+      const payload = {
+        rpid: selectedPayee?.id ?? payeeQuery.trim(),
+        payeeName: selectedPayee?.name ?? payeeQuery.trim(),
+        payeeEmail: email.trim(),
+        payeePhone: mobilePhone.replace(/\D/g, ""),
+        paymentTitle: paymentTitle.trim(),
+        amount: Number(amount),
+        amountRaw: amount,
+        referenceNumber: referenceNumber.trim(),
+        paymentMethod,
+        payee: selectedPayee,
+      };
+      const res = await juiceFetch("/v1/insurance/add", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setSuccess(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to create payment");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleCreateNewPayee = (e: React.FormEvent) => {
@@ -529,12 +554,13 @@ export default function MakePaymentPage() {
             <div className="flex justify-end pt-2">
               <Button
                 type="submit"
-                className="h-[36px] rounded-[8px] bg-[#6aa8ff] hover:bg-[#4d95ff] active:bg-[#3d8aff] text-white text-[12.5px] font-semibold px-4 gap-1.5 shadow-sm"
+                disabled={submitting}
+                className="h-[36px] rounded-[8px] bg-[#6aa8ff] hover:bg-[#4d95ff] active:bg-[#3d8aff] text-white text-[12.5px] font-semibold px-4 gap-1.5 shadow-sm disabled:opacity-60"
               >
                 <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20">
-                  <ShieldCheck size={13} className="text-white" />
+                  {submitting ? <Loader2 size={13} className="text-white animate-spin" /> : <ShieldCheck size={13} className="text-white" />}
                 </span>
-                Create Payment
+                {submitting ? "Creating..." : "Create Payment"}
               </Button>
             </div>
           </form>
