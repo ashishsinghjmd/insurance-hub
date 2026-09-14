@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable react-hooks/set-state-in-effect -- rpid sync from URL is intentional (mirrors juice-pro GenericHubInviteForm -> HubForm rpidParam flow) */
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
@@ -50,7 +50,7 @@ const PAYMENT_METHODS = [
   "Check",
 ] as const;
 
-export default function MakePaymentPage() {
+function MakePaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rpidParam = searchParams.get("rpid");
@@ -486,5 +486,13 @@ export default function MakePaymentPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function MakePaymentPage() {
+  return (
+    <Suspense fallback={<div className="portal-content"><div className="mx-auto max-w-[880px] p-6 text-sm text-muted-foreground">Loading...</div></div>}>
+      <MakePaymentContent />
+    </Suspense>
   );
 }
