@@ -42,7 +42,7 @@ import { useRoles } from "@/hooks/use-role";
 export { Badge, Label, Skeleton };
 
 const baseNav = [
-  { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard, group: "Main" },
+  { label: "Overview", path: "/overview", icon: LayoutDashboard, group: "Main" },
   { label: "Policies", path: "/policies", icon: FileText, group: "Main" },
   { label: "Claims", path: "/claims", icon: Activity, group: "Main" },
   { label: "Make Payment", path: "/make-payment", icon: CreditCard, group: "Payments" },
@@ -197,7 +197,7 @@ function NavItem({
   current: string;
   onClick: () => void;
 }) {
-  const isActive = current === path || (path !== "/dashboard" && current.startsWith(path));
+  const isActive = current === path || (path !== "/overview" && current.startsWith(path));
   return (
     <button
       className={`portal-nav-item ${isActive ? "active" : ""}`}
