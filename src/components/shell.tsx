@@ -45,7 +45,7 @@ const baseNav = [
   { label: "Overview", path: "/overview", icon: LayoutDashboard, group: "Main" },
   { label: "Policies", path: "/policies", icon: FileText, group: "Main" },
   { label: "Claims", path: "/claims", icon: Activity, group: "Main" },
-  { label: "Make Payment", path: "/make-payment", icon: CreditCard, group: "Payments" },
+  { label: "Make Payment", path: "/insurance/add", icon: CreditCard, group: "Payments" },
   { label: "New Payee", path: "/new-payee", icon: UserPlus, group: "Payee" },
   { label: "New Policy", path: "/policies/new", icon: UserPlus, group: "Actions" },
   { label: "New Claim", path: "/claims/new", icon: ShieldCheck, group: "Actions" },
