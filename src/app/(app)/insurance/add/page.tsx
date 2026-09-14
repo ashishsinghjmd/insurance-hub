@@ -544,7 +544,10 @@ function MakePaymentInner() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(getApiErrorMessage(errText, res.statusText || "Failed to create payee"));
+      }
       const body = await res.json().catch(() => ({}));
       const rpid = String(body?.data?.payeeId ?? body?.data?.rpid ?? body?.rpid ?? Math.floor(9800000000 + Math.random() * 99999999));
       const created: Payee = {
