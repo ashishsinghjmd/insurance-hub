@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Calendar, Check, Info, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,8 @@ function FieldLabel({ children, required, info }: { children: React.ReactNode; r
 }
 
 export default function NewPayeePage() {
+  const router = useRouter();
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [form, setForm] = useState<FormState>({
     legalFirstName: "",
     middleName: "",
@@ -84,6 +87,15 @@ export default function NewPayeePage() {
   const [submitting, setSubmitting] = useState(false);
 
   const update = (patch: Partial<FormState>) => setForm((p) => ({ ...p, ...patch }));
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,8 +144,22 @@ export default function NewPayeePage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(await res.text());
+      let rpid: string | null = null;
+      try {
+        const data = await res.clone().json() as { data?: { rpid?: string }; rpid?: string };
+        rpid = data?.data?.rpid ?? data?.rpid ?? null;
+      } catch {}
       setSuccess(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+      const redirectPath = "/insurance/add";
+      redirectTimerRef.current = setTimeout(() => {
+        if (rpid) router.push(`${redirectPath}?rpid=${encodeURIComponent(rpid)}`);
+        else router.push(redirectPath);
+      }, 3000);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save payee");
     } finally {
@@ -382,8 +408,7 @@ export default function NewPayeePage() {
             {/* Attestation */}
             <label className="flex items-start gap-2.5 pt-3 cursor-pointer select-none">
               <span
-                onClick={() => update({ attested: !form.attested })}
-                className={`mt-0.5 grid h-[16px] w-[16px] shrink-0 place-items-center rounded-full border ${form.attested ? "bg-[#017BFD] border-[#017BFD]" : "bg-white border-[#cbd5e1]"} transition-colors`}
+                className={`mt-0.5 grid h-[16px] w-[16px] shrink-0 place-items-center rounded-full border pointer-events-none ${form.attested ? "bg-[#017BFD] border-[#017BFD]" : "bg-white border-[#cbd5e1]"} transition-colors`}
               >
                 {form.attested && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
               </span>
