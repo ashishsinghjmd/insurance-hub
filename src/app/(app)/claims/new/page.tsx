@@ -132,7 +132,7 @@ export default function NewClaimPage() {
               rows={4}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Provide a detailed account of the incident…"
+              placeholder="Provide a detailed account of the incident..."
             />
           </FormRow>
 
