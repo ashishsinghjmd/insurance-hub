@@ -216,13 +216,37 @@ function ConfirmInner() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        let msg = text;
+        let code: string | undefined;
+        try {
+          const j = JSON.parse(text);
+          msg = j?.error?.message || j?.message || j?.error?.code || text;
+          code = j?.error?.code || j?.code;
+        } catch {}
+        // If already processed, update status so UI shows approved message and hides submit
+        if (code === "PAYMENT_ALREADY_PROCESSED" || msg.toLowerCase().includes("already been processed")) {
+          setStatus("approved");
+          // also extract status from message if present: "Current status: approved"
+          const m = msg.match(/Current status:\s*(\w+)/i);
+          if (m) setStatus(m[1].toLowerCase());
+        }
+        throw new Error(msg);
+      }
       setSuccess(true);
       try {
         sessionStorage.removeItem(`insurance:confirm:${paymentId}`);
       } catch {}
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to submit payment");
+      const raw = e instanceof Error ? e.message : "Failed to submit payment";
+      // Ensure we display the extracted message key, not raw JSON
+      let display = raw;
+      try {
+        const j = JSON.parse(raw);
+        display = j?.error?.message || j?.message || raw;
+      } catch {}
+      setError(display);
     } finally {
       setSubmitting(false);
     }

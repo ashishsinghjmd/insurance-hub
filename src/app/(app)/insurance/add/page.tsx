@@ -440,13 +440,43 @@ function MakePaymentInner() {
 
       const endpoint = isUpdate ? `/v1/insurance/${encodeURIComponent(String(entityParam))}/update` : "/v1/insurance/add";
       const method = isUpdate ? "PUT" : "POST";
-      const res = await juiceFetch(endpoint, {
-        method,
-        body: JSON.stringify(payload),
-      });
+      // Helper to submit with given reference number
+      const submitWithRef = async (ref: string) => {
+        const p = { ...payload, referenceNumber: ref };
+        const r = await juiceFetch(endpoint, {
+          method,
+          body: JSON.stringify(p),
+        });
+        return { res: r, payload: p };
+      };
+      let { res, payload: finalPayload } = await submitWithRef(payload.referenceNumber as string);
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText);
-        throw new Error(errText);
+        // Handle duplicate reference number - generate unique and retry once (mirrors HubForm checkReferenceNumberAvailable)
+        let isDuplicate = false;
+        try {
+          const j = JSON.parse(errText);
+          isDuplicate = j?.error?.code === "DUPLICATE_REFERENCE_NUMBER" || j?.code === "DUPLICATE_REFERENCE_NUMBER";
+        } catch {
+          isDuplicate = errText.includes("DUPLICATE_REFERENCE_NUMBER") || errText.toLowerCase().includes("reference number already exists");
+        }
+        if (isDuplicate && !isUpdate) {
+          const baseRef = String(payload.referenceNumber).trim().split("-")[0] || "REF";
+          const newRef = `${baseRef}-${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 4)}`.toUpperCase();
+          setReferenceNumber(newRef);
+          const retry = await submitWithRef(newRef);
+          if (!retry.res.ok) {
+            const retryText = await retry.res.text().catch(() => retry.res.statusText);
+            throw new Error(retryText);
+          }
+          // use retry result
+          res = retry.res;
+          finalPayload = retry.payload;
+          // update payload reference for cache
+          (payload as any).referenceNumber = newRef;
+        } else {
+          throw new Error(errText);
+        }
       }
       let paymentId = isUpdate ? String(entityParam) : "1797";
       try {
@@ -456,9 +486,10 @@ function MakePaymentInner() {
       } catch {
         // keep default and also cache payload so confirm can show it without API
       }
-      // Cache for confirm page (handles both create and update)
+      // Cache for confirm page (handles both create and update) - use finalPayload with corrected referenceNumber
       try {
-        const cachePayload = { ...payload, payeeName: (payload as any).payeeName ?? selectedPayee?.name, rpid: (payload as any).rpid ?? rawRpid, paymentId };
+        const baseForCache = (typeof finalPayload !== "undefined" ? finalPayload : payload) as any;
+        const cachePayload = { ...baseForCache, payeeName: baseForCache.payeeName ?? selectedPayee?.name, rpid: baseForCache.rpid ?? rawRpid, paymentId };
         sessionStorage.setItem(`insurance:confirm:${paymentId}`, JSON.stringify(cachePayload));
         sessionStorage.setItem("insurance:last-payment", paymentId);
       } catch {}
