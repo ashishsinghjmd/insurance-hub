@@ -4,7 +4,33 @@ const JUICE_API_URL =
   process.env.JUICE_API_URL ||
   process.env.JUICE_PRO_API_URL ||
   process.env.NEXT_PUBLIC_JUICE_API_URL ||
-  "http://localhost:3000";
+  "https://staging-juice-pro.juicefin.com";
+
+const CSRF_HEADER_NAME = "X-CSRF-Token";
+
+/**
+ * juice-pro protects all state-changing (POST/PUT/PATCH/DELETE) routes with
+ * Redis-backed CSRF tokens (see juice-pro/lib/middleware/csrf.ts). A token
+ * must first be minted via GET /api/csrf/token (bound to the caller's Auth0
+ * session cookie) and then echoed back in the `X-CSRF-Token` header on the
+ * actual request, otherwise juice-pro responds with
+ * `MALFORMED_REQUEST: "Invalid request format - token required in header"`.
+ */
+async function fetchCsrfToken(cookie: string | null): Promise<string | null> {
+  try {
+    const res = await fetch(`${JUICE_API_URL.replace(/\/$/, "")}/api/csrf/token`, {
+      method: "GET",
+      headers: cookie ? { cookie } : {},
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => null);
+    const token = body?.data?.csrfToken || body?.csrfToken;
+    return typeof token === "string" ? token : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,10 +86,19 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text();
     const target = `${JUICE_API_URL.replace(/\/$/, "")}/api/v1/insurance/confirm`;
 
+    const cookie = request.headers.get("cookie");
+    const csrfToken = await fetchCsrfToken(cookie);
+    if (!csrfToken) {
+      return NextResponse.json(
+        { status: "error", code: 502, message: "Unable to obtain CSRF token from Juice API" },
+        { status: 502 }
+      );
+    }
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      [CSRF_HEADER_NAME]: csrfToken,
     };
-    const cookie = request.headers.get("cookie");
     if (cookie) headers["cookie"] = cookie;
     const authorization = request.headers.get("authorization");
     if (authorization) headers["authorization"] = authorization;

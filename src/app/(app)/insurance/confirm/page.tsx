@@ -20,7 +20,7 @@ type PaymentOverview = {
 };
 
 const MOCK_PAYMENT: PaymentOverview = {
-  payeeName: "konica arora",
+  payeeName: "konica  arora",
   paymentTitle: "testing",
   email: "konica@joomdev.com",
   mobilePhone: "+1 (123) 456-7890",
@@ -32,13 +32,18 @@ const MOCK_PAYMENT: PaymentOverview = {
 function ConfirmInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const paymentId = searchParams.get("payment") || searchParams.get("id") || "1797";
+  const rawPayment = searchParams.get("payment") || searchParams.get("id") || "1797";
+  const paymentId = rawPayment ? decodeURIComponent(rawPayment) : null;
+  const token = searchParams.get("token");
 
   const [data, setData] = useState<PaymentOverview>(MOCK_PAYMENT);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [status, setStatus] = useState<string>("draft");
+  const [canApprove, setCanApprove] = useState(false);
+  const [isTokenFlow, setIsTokenFlow] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,59 +51,108 @@ function ConfirmInner() {
       setLoading(true);
       setError(null);
       try {
-        // 1. Prefer cached payload from make-payment (sessionStorage) so confirm works without backend
-        try {
-          const cachedRaw = sessionStorage.getItem(`insurance:confirm:${paymentId}`);
-          if (cachedRaw) {
-            const cached = JSON.parse(cachedRaw) as any;
-            const normalized: PaymentOverview = {
-              payeeName: cached.payeeName ?? cached.payee?.name ?? MOCK_PAYMENT.payeeName,
-              paymentTitle: cached.paymentTitle ?? MOCK_PAYMENT.paymentTitle,
-              email: cached.payeeEmail ?? cached.email ?? MOCK_PAYMENT.email,
-              mobilePhone: cached.payeePhone
-                ? `+1 (${String(cached.payeePhone).slice(0, 3)}) ${String(cached.payeePhone).slice(3, 6)}-${String(cached.payeePhone).slice(6)}`
-                : MOCK_PAYMENT.mobilePhone,
-              referenceNumber: cached.referenceNumber ?? MOCK_PAYMENT.referenceNumber,
-              amount: cached.amount ? `$${Number(cached.amount).toFixed(2)}` : MOCK_PAYMENT.amount,
-              paymentMethods: cached.paymentMethod ? [String(cached.paymentMethod)] : MOCK_PAYMENT.paymentMethods,
-            };
-            if (!cancelled) {
-              setData(normalized);
-              setLoading(false);
-              return;
+        // 1. If approval token present, fetch via token (approver flow) - mirrors HubOverview approvalToken fetch
+        if (token) {
+          setIsTokenFlow(true);
+          try {
+            const res = await juiceFetch(`/v1/insurance/approval/${encodeURIComponent(token)}`, { method: "GET" });
+            if (res.ok) {
+              const json: any = await res.json();
+              const raw: any = json?.data ?? json;
+              const normalized: PaymentOverview = {
+                payeeName: raw?.payeeName ?? raw?.payee_name ?? MOCK_PAYMENT.payeeName,
+                paymentTitle: raw?.paymentTitle ?? raw?.payment_title ?? MOCK_PAYMENT.paymentTitle,
+                email: raw?.email ?? MOCK_PAYMENT.email,
+                mobilePhone: raw?.mobilePhone ?? raw?.mobile_phone ?? MOCK_PAYMENT.mobilePhone,
+                referenceNumber: raw?.referenceNumber ?? raw?.reference_number ?? MOCK_PAYMENT.referenceNumber,
+                amount: raw?.amount ? `$${String(raw.amount).replace("$", "")}` : MOCK_PAYMENT.amount,
+                paymentMethods: Array.isArray(raw?.paymentMethods) ? raw.paymentMethods : MOCK_PAYMENT.paymentMethods,
+              };
+              if (!cancelled) {
+                setData(normalized);
+                setStatus(String(raw?.status ?? "draft"));
+                setCanApprove(Boolean(raw?.canApprove));
+                setLoading(false);
+                return;
+              }
+            }
+          } catch {}
+          // fallback to mock if token fetch fails
+        }
+
+        // 2. Prefer cached payload from make-payment (sessionStorage) so confirm works without backend
+        if (paymentId) {
+          try {
+            const cachedRaw = sessionStorage.getItem(`insurance:confirm:${paymentId}`);
+            if (cachedRaw) {
+              const cached = JSON.parse(cachedRaw) as any;
+              const normalized: PaymentOverview = {
+                payeeName: cached.payeeName ?? cached.payee?.name ?? cached.name ?? MOCK_PAYMENT.payeeName,
+                paymentTitle: cached.paymentTitle ?? MOCK_PAYMENT.paymentTitle,
+                email: cached.payeeEmail ?? cached.email ?? cached.payee?.email ?? MOCK_PAYMENT.email,
+                mobilePhone: cached.payeePhone
+                  ? `+1 (${String(cached.payeePhone).slice(0, 3)}) ${String(cached.payeePhone).slice(3, 6)}-${String(cached.payeePhone).slice(6)}`
+                  : cached.phone
+                    ? `+1 (${String(cached.phone).slice(0, 3)}) ${String(cached.phone).slice(3, 6)}-${String(cached.phone).slice(6)}`
+                    : MOCK_PAYMENT.mobilePhone,
+                referenceNumber: cached.referenceNumber ?? MOCK_PAYMENT.referenceNumber,
+                amount: cached.amount != null ? `$${Number(cached.amount).toFixed(2)}` : MOCK_PAYMENT.amount,
+                paymentMethods: Array.isArray(cached.paymentMethods)
+                  ? cached.paymentMethods.map((m: string) => (m === "virtual-card" ? "Virtual Card" : String(m)))
+                  : cached.paymentMethod
+                    ? [String(cached.paymentMethod).toLowerCase() === "virtual-card" ? "Virtual Card" : String(cached.paymentMethod)]
+                    : MOCK_PAYMENT.paymentMethods,
+              };
+              if (!cancelled) {
+                setData(normalized);
+                setStatus(String(cached.status ?? "draft"));
+                setCanApprove(Boolean(cached.canApprove));
+                setLoading(false);
+                return;
+              }
+            }
+          } catch {}
+        }
+
+        // 3. Try to load real payment from Juice - fallback to mock matching screenshot
+        if (paymentId) {
+          let res = await juiceFetch(`/v1/insurance/confirm?payment=${encodeURIComponent(paymentId)}`, {
+            method: "GET",
+          });
+          if (!res.ok) {
+            // fallback try payments endpoint and insurance payment by id (HubForm's INSURANCE_PAYMENT_BY_ID)
+            res = await juiceFetch(`/v1/insurance/payment/${encodeURIComponent(paymentId)}`, { method: "GET" });
+            if (!res.ok) {
+              res = await juiceFetch(`/v1/payments/${encodeURIComponent(paymentId)}`, { method: "GET" });
             }
           }
-        } catch {}
-        // 2. Try to load real payment from Juice - fallback to mock matching screenshot
-        // Primary: GET /api/v1/insurance/confirm?payment=1797 (proxied to Juice)
-        // Secondary: GET /api/v1/payments/1797
-        let res = await juiceFetch(`/v1/insurance/confirm?payment=${encodeURIComponent(paymentId)}`, {
-          method: "GET",
-        });
-        if (!res.ok) {
-          // fallback try payments endpoint
-          res = await juiceFetch(`/v1/payments/${encodeURIComponent(paymentId)}`, { method: "GET" });
+          if (!res.ok) throw new Error(await res.text());
+          const json = await res.json();
+          // normalize shapes: {data:{...}} or direct
+          const raw: any = json?.data ?? json;
+          const normalized: PaymentOverview = {
+            payeeName: raw?.payeeName ?? raw?.payee_name ?? raw?.full_name ?? raw?.name ?? MOCK_PAYMENT.payeeName,
+            paymentTitle: raw?.paymentTitle ?? raw?.payment_title ?? raw?.title ?? MOCK_PAYMENT.paymentTitle,
+            email: raw?.email ?? MOCK_PAYMENT.email,
+            mobilePhone: raw?.mobilePhone ?? raw?.mobile_phone ?? raw?.phone ?? MOCK_PAYMENT.mobilePhone,
+            referenceNumber: raw?.referenceNumber ?? raw?.reference_number ?? raw?.ref ?? MOCK_PAYMENT.referenceNumber,
+            amount: raw?.amount ? `$${String(raw.amount).replace("$", "")}` : MOCK_PAYMENT.amount,
+            paymentMethods: Array.isArray(raw?.paymentMethods)
+              ? raw.paymentMethods
+              : Array.isArray(raw?.methods)
+                ? raw.methods
+                : raw?.paymentMethod
+                  ? [String(raw.paymentMethod)]
+                  : MOCK_PAYMENT.paymentMethods,
+          };
+          if (!cancelled) {
+            setData(normalized);
+            setStatus(String(raw?.status ?? "draft"));
+            setCanApprove(Boolean(raw?.canApprove));
+          }
+        } else {
+          if (!cancelled) setData(MOCK_PAYMENT);
         }
-        if (!res.ok) throw new Error(await res.text());
-        const json = await res.json();
-        // normalize shapes: {data:{...}} or direct
-        const raw: any = json?.data ?? json;
-        const normalized: PaymentOverview = {
-          payeeName: raw?.payeeName ?? raw?.payee_name ?? raw?.full_name ?? raw?.name ?? MOCK_PAYMENT.payeeName,
-          paymentTitle: raw?.paymentTitle ?? raw?.payment_title ?? raw?.title ?? MOCK_PAYMENT.paymentTitle,
-          email: raw?.email ?? MOCK_PAYMENT.email,
-          mobilePhone: raw?.mobilePhone ?? raw?.mobile_phone ?? raw?.phone ?? MOCK_PAYMENT.mobilePhone,
-          referenceNumber: raw?.referenceNumber ?? raw?.reference_number ?? raw?.ref ?? MOCK_PAYMENT.referenceNumber,
-          amount: raw?.amount ? `$${String(raw.amount).replace("$", "")}` : MOCK_PAYMENT.amount,
-          paymentMethods: Array.isArray(raw?.paymentMethods)
-            ? raw.paymentMethods
-            : Array.isArray(raw?.methods)
-              ? raw.methods
-              : raw?.paymentMethod
-                ? [String(raw.paymentMethod)]
-                : MOCK_PAYMENT.paymentMethods,
-        };
-        if (!cancelled) setData(normalized);
       } catch (e) {
         // keep mock on failure but surface error if not 404
         if (!cancelled) {
@@ -114,23 +168,59 @@ function ConfirmInner() {
     return () => {
       cancelled = true;
     };
-  }, [paymentId]);
+  }, [paymentId, token]);
+
+  // Mirrors HubOverview canEdit logic
+  const isDraft = !status || status.toLowerCase() === "draft";
+  const isApprover = isTokenFlow || !!token;
+  const canEdit = isDraft && !isApprover;
+  const editTooltip = !isDraft
+    ? `Cannot edit ${status} payments. Only draft payments can be edited.`
+    : isApprover
+      ? "Approvers cannot edit payments. This is a read-only view."
+      : "Edit payment";
 
   const handleEdit = () => {
-    router.push(`/make-payment?payment=${encodeURIComponent(paymentId)}&edit=1`);
+    // Mirrors HubOverview handleEdit - set isEdit and push with encoded entityId
+    if (!canEdit) return;
+    if (paymentId) {
+      const encoded = encodeURIComponent(paymentId);
+      router.push(`/insurance/add?payment=${encoded}`);
+      return;
+    }
+    router.push("/insurance/add");
   };
+
+  // For submit actions - mirrors HubOverviewSubmitActions
+  const numericAmount = Number(data.amount.replace(/[^0-9.-]+/g, "")) || 0;
+  const isAmountLessThanThreshold = numericAmount < 1000; // simplified threshold
+  const isPending = status && status.toLowerCase() === "pending_approval";
+  const isApproved = status && status.toLowerCase() === "approved";
+  const isRejected = status && status.toLowerCase() === "rejected";
+  const isCancelled = status && status.toLowerCase() === "cancelled";
+  const showSubmitButton =
+    (!isApproved && !isRejected && !isCancelled && !isPending) || (isPending && canApprove);
+  const actionText = isPending ? "Approve" : isAmountLessThanThreshold ? "Submit" : "Request Approval";
 
   const handleSubmit = async () => {
     setSubmitting(true);
     setError(null);
     setSuccess(false);
     try {
+      // Payload as requested: {"paymentId":"2398","isAutoApproved":true}
+      const payload = {
+        paymentId: String(paymentId),
+        isAutoApproved: true,
+      };
       const res = await juiceFetch(`/v1/insurance/confirm`, {
         method: "POST",
-        body: JSON.stringify({ payment: paymentId, paymentId }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(await res.text());
       setSuccess(true);
+      try {
+        sessionStorage.removeItem(`insurance:confirm:${paymentId}`);
+      } catch {}
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to submit payment");
     } finally {
@@ -168,7 +258,9 @@ function ConfirmInner() {
               variant="outline"
               size="sm"
               onClick={handleEdit}
-              className="h-8 rounded-[8px] border-[#0d7bff] text-[#0d7bff] hover:bg-[#eaf1ff] hover:text-[#0d7bff] bg-white text-[12.5px] font-medium gap-1.5 px-4"
+              disabled={!canEdit}
+              title={editTooltip}
+              className="h-8 rounded-[8px] border-[#0d7bff] text-[#0d7bff] hover:bg-[#eaf1ff] hover:text-[#0d7bff] bg-white text-[12.5px] font-medium gap-1.5 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Pencil size={14} className="text-[#0d7bff]" />
               Edit
@@ -225,16 +317,27 @@ function ConfirmInner() {
             </div>
           )}
 
-          {/* Footer Submit */}
-          <div className="flex justify-end pt-8">
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting || loading}
-              className="h-[38px] rounded-[8px] bg-[#0d7bff] hover:bg-[#0066e6] active:bg-[#005ad1] text-white text-[13px] font-semibold px-5 gap-2 shadow-sm disabled:opacity-60"
-            >
-              {submitting ? <Loader2 size={16} className="animate-spin text-white" /> : <ShieldCheck size={16} className="text-white" />}
-              {submitting ? "Submitting..." : "Submit"}
-            </Button>
+          {/* Footer Submit - mirrors HubOverviewSubmitActions */}
+          <div className="flex flex-col gap-3 pt-8">
+            {!showSubmitButton ? (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-blue-700 text-sm">
+                {isApproved && "Payment has been approved. No further action needed."}
+                {isRejected && "Payment has been rejected. You can create a new payment if needed."}
+                {isCancelled && "Payment has been cancelled. You can create a new payment if needed."}
+                {isPending && !canApprove && "Payment is pending approval. Waiting for approver response."}
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitting || loading}
+                  className="h-[38px] rounded-[8px] bg-[#0d7bff] hover:bg-[#0066e6] active:bg-[#005ad1] text-white text-[13px] font-semibold px-5 gap-2 shadow-sm disabled:opacity-60"
+                >
+                  {submitting ? <Loader2 size={16} className="animate-spin text-white" /> : <ShieldCheck size={16} className="text-white" />}
+                  {submitting ? "Processing..." : actionText}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 

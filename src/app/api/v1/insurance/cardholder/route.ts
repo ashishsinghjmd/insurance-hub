@@ -18,13 +18,28 @@ const CARDHOLDERS_PATH = "/api/v1/reports/cardholders";
 
 type RawCardholder = {
   rpid_?: string | number;
+  rpid?: string | number;
+  id?: string | number;
+  payeeId?: string | number;
   full_name?: string;
+  fullName?: string;
+  payeeName?: string;
+  name?: string;
   first_name?: string;
   last_name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   mobile_phone?: string | number;
   phone?: string | number;
+  mobilePhone?: string | number;
   card_status?: string;
+  cardStatus?: string;
+  status?: string;
+  address?: string;
+  dateOfBirth?: string;
+  date_of_birth?: string;
+  dob?: string;
 };
 
 type Payee = {
@@ -33,18 +48,33 @@ type Payee = {
   email: string;
   phone: string;
   status: string;
+  address?: string;
+  cardStatus?: string;
+  dateOfBirth?: string;
 };
 
 function toPayee(ch: RawCardholder): Payee | null {
-  const id = ch.rpid_ !== undefined && ch.rpid_ !== null ? String(ch.rpid_) : "";
+  const rawId = ch.rpid_ ?? ch.rpid ?? ch.id ?? ch.payeeId;
+  const id = rawId !== undefined && rawId !== null ? String(rawId).trim() : "";
   if (!id) return null;
-  const name = ch.full_name?.trim() || [ch.first_name, ch.last_name].filter(Boolean).join(" ").trim() || "Unknown";
+  const name =
+    (ch.payeeName && String(ch.payeeName).trim()) ||
+    (ch.full_name && String(ch.full_name).trim()) ||
+    (ch.fullName && String(ch.fullName).trim()) ||
+    (ch.name && String(ch.name).trim()) ||
+    [ch.first_name ?? ch.firstName, ch.last_name ?? ch.lastName].filter(Boolean).join(" ").trim() ||
+    "Unknown";
+  // avoid Unknown if name is still empty but we have id
+  const displayName = name && name !== "Unknown" ? name : id !== "Unknown" ? `Payee ${id}` : "Unknown";
   return {
     id,
-    name,
-    email: ch.email || "",
-    phone: String(ch.mobile_phone ?? ch.phone ?? ""),
-    status: ch.card_status || "",
+    name: displayName,
+    email: String(ch.email ?? ""),
+    phone: String(ch.mobile_phone ?? ch.mobilePhone ?? ch.phone ?? ""),
+    status: String(ch.card_status ?? ch.cardStatus ?? ch.status ?? "ACT"),
+    address: ch.address ? String(ch.address) : undefined,
+    cardStatus: String(ch.card_status ?? ch.cardStatus ?? ch.status ?? "ACT"),
+    dateOfBirth: String(ch.dateOfBirth ?? ch.date_of_birth ?? ch.dob ?? "2008-01-16"),
   };
 }
 
