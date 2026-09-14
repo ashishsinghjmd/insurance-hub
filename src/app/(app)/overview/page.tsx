@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useUser } from "@auth0/nextjs-auth0";
 import { ArrowRight, FileText, LifeBuoy, ShieldCheck, TrendingUp } from "lucide-react";
 import { Button, Card, Head, Tag } from "@/components/shell";
+import { useRoles } from "@/hooks/use-role";
 
 const stats = [
   { label: "Active Policies", value: "1,234", sub: "+12% this quarter", icon: ShieldCheck },
@@ -19,6 +22,12 @@ const recentPolicies = [
 ];
 
 export default function DashboardPage() {
+  const [mounted, setMounted] = useState(false);
+  const { user, isLoading } = useUser();
+  const { role } = useRoles();
+
+  useEffect(() => { setMounted(true); }, []);
+
   return (
     <div className="portal-content">
       <Head
@@ -31,6 +40,37 @@ export default function DashboardPage() {
           </Button>
         }
       />
+
+      {mounted && (
+        <Card style={{ marginBottom: 24 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>User Info (Debug)</h2>
+          {isLoading ? (
+            <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Loading user info…</div>
+          ) : user ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8, fontSize: 12 }}>
+              <div><span style={{ color: "var(--muted-foreground)" }}>Name:</span> {user.name || "—"}</div>
+              <div><span style={{ color: "var(--muted-foreground)" }}>Nickname:</span> {user.nickname || "—"}</div>
+              <div><span style={{ color: "var(--muted-foreground)" }}>Given Name:</span> {user.given_name || "—"}</div>
+              <div><span style={{ color: "var(--muted-foreground)" }}>Family Name:</span> {user.family_name || "—"}</div>
+              <div><span style={{ color: "var(--muted-foreground)" }}>Email:</span> {user.email || "—"}{user.email_verified ? " ✓" : ""}</div>
+              <div><span style={{ color: "var(--muted-foreground)" }}>Picture:</span> {user.picture ? <a href={user.picture} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline" }}>{user.picture}</a> : "—"}</div>
+              <div><span style={{ color: "var(--muted-foreground)" }}>User ID:</span> <code style={{ fontSize: 11 }}>{user.sub || "—"}</code></div>
+              <div><span style={{ color: "var(--muted-foreground)" }}>Org ID:</span> {user.org_id || "—"}</div>
+              <div><span style={{ color: "var(--muted-foreground)" }}>Role:</span> {role || "—"}</div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>No user data available.</div>
+          )}
+          {user && (
+            <details style={{ marginTop: 12 }}>
+              <summary style={{ fontSize: 11, cursor: "pointer", color: "var(--muted-foreground)" }}>Raw JSON</summary>
+              <pre style={{ fontSize: 10, background: "var(--muted)", padding: 8, borderRadius: 4, overflow: "auto", maxHeight: 300, marginTop: 8 }}>
+                {JSON.stringify(user, null, 2)}
+              </pre>
+            </details>
+          )}
+        </Card>
+      )}
 
       <div className="portal-grid portal-grid-4" style={{ marginBottom: 24 }}>
         {stats.map((stat) => (
