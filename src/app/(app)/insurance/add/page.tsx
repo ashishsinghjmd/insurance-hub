@@ -118,6 +118,25 @@ function getApiErrorMessage(raw: string, fallback = "Request failed"): string {
   return trimmed;
 }
 
+function sanitizeAmountInput(value: string): string {
+  let v = value.replace(/[^0-9.]/g, "");
+  const parts = v.split(".");
+  if (parts.length > 2) v = parts[0] + "." + parts.slice(1).join("");
+  if (v.includes(".")) {
+    const [intPart, decPart] = v.split(".");
+    v = intPart + "." + decPart.slice(0, 2);
+  }
+  return v;
+}
+
+function formatAmountOnBlur(value: string): string {
+  if (!value || value.trim() === "" || value === ".") return value;
+  const num = Number(value);
+  if (isNaN(num)) return value;
+  // keep 0 as 0.00, but enforce minimum display 0.01 formatting (2 decimals)
+  return num.toFixed(2);
+}
+
 function MakePaymentInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -328,7 +347,7 @@ function MakePaymentInner() {
           const payeeName = String(data.payeeName ?? data.payee_name ?? data.full_name ?? "");
           const rpid = String(data.rpid ?? data.rpid_ ?? data.id ?? decoded).replace(/\D/g, "");
           setPaymentTitle(String(data.paymentTitle ?? data.payment_title ?? ""));
-          setAmount(String(data.amount ?? "0.01").replace(/[^0-9.]/g, ""));
+          setAmount(formatAmountOnBlur(sanitizeAmountInput(String(data.amount ?? "0.01"))));
           setReferenceNumber(String(data.referenceNumber ?? data.reference_number ?? ""));
           const methods = Array.isArray(data.paymentMethods) ? data.paymentMethods : data.paymentMethod ? [String(data.paymentMethod)] : [];
           if (methods.length) setPaymentMethod(String(methods[0]).toLowerCase() === "virtual-card" ? methods[0] : methods[0]);
@@ -786,14 +805,10 @@ function MakePaymentInner() {
                 <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] font-medium text-[#0f172a]">$</span>
                 <Input
                   value={amount}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^0-9.]/g, "");
-                    // allow only one dot
-                    const parts = v.split(".");
-                    const cleaned = parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : v;
-                    setAmount(cleaned);
-                  }}
-                  placeholder="0.00"
+                  onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))}
+                  onBlur={() => setAmount((prev) => formatAmountOnBlur(prev))}
+                  onFocus={(e) => e.target.select()}
+                  placeholder="0.01"
                   inputMode="decimal"
                   className="h-[42px] rounded-[12px] border-[#eef2f7] bg-white pl-7 pr-3.5 text-[13px] shadow-sm placeholder:text-[#6b7280] placeholder:font-medium focus-visible:ring-[#017BFD]/20 focus-visible:border-[#017BFD]"
                   required
