@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   Info,
+  Loader2,
   RefreshCw,
   ShieldCheck,
   UserPlus,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -23,6 +25,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Notice } from "@/components/shell";
+import { juiceFetch } from "@/lib/api";
 
 type Payee = {
   id: string;
@@ -31,15 +34,7 @@ type Payee = {
   phone: string;
 };
 
-const MOCK_PAYEES: Payee[] = [
-  { id: "RPID-8821", name: "John Carter", email: "john.carter@email.com", phone: "201-555-0123" },
-  { id: "RPID-8822", name: "Sarah Kim", email: "sarah.kim@email.com", phone: "415-555-0199" },
-  { id: "RPID-8823", name: "David Lee", email: "david.lee@email.com", phone: "312-555-0142" },
-  { id: "RPID-8824", name: "Maria Gomez", email: "maria.gomez@email.com", phone: "713-555-0176" },
-  { id: "RPID-8825", name: "James Wong", email: "james.wong@email.com", phone: "206-555-0188" },
-];
-
-const PAYMENT_METHODS = [
+const FALLBACK_PAYMENT_METHODS = [
   "Virtual Card",
   "Wire Transfer",
   "ACH",
@@ -63,17 +58,91 @@ export default function MakePaymentPage() {
   const [newPayeeOpen, setNewPayeeOpen] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([...FALLBACK_PAYMENT_METHODS]);
+  const [methodsLoading, setMethodsLoading] = useState(true);
+  const [methodsError, setMethodsError] = useState<string | null>(null);
 
   // new payee form
   const [newPayee, setNewPayee] = useState({ name: "", email: "", phone: "" });
 
+  // live payees loaded from the real cardholder API
+  const [payees, setPayees] = useState<Payee[]>([]);
+  const [payeesLoading, setPayeesLoading] = useState(true);
+  const [payeesError, setPayeesError] = useState<string | null>(null);
+
+  const loadPayees = async () => {
+    setPayeesLoading(true);
+    setPayeesError(null);
+    try {
+      const res = await juiceFetch("/v1/insurance/cardholder");
+      if (!res.ok) throw new Error(await res.text());
+      const body = await res.json();
+      setPayees(body?.data?.payees ?? []);
+    } catch (err: unknown) {
+      setPayeesError(err instanceof Error ? err.message : "Failed to load payees");
+    } finally {
+      setPayeesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPayees();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadMethods = async () => {
+      setMethodsLoading(true);
+      setMethodsError(null);
+      try {
+        const res = await juiceFetch("/v1/payment-methods?includeOrgOptIn=true", {
+          method: "GET",
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const json = await res.json();
+        let raw: unknown = json;
+        if (json && typeof json === "object" && "data" in json) raw = (json as { data: unknown }).data;
+        if (raw && typeof raw === "object" && "paymentMethods" in (raw as Record<string, unknown>)) {
+          raw = (raw as { paymentMethods: unknown }).paymentMethods;
+        }
+        if (raw && typeof raw === "object" && "methods" in (raw as Record<string, unknown>)) {
+          raw = (raw as { methods: unknown }).methods;
+        }
+        const arr = Array.isArray(raw) ? raw : [];
+        const normalized = arr
+          .map((item) => {
+            if (typeof item === "string") return item;
+            if (item && typeof item === "object") {
+              const obj = item as Record<string, unknown>;
+              return String(obj.label ?? obj.name ?? obj.value ?? obj.code ?? obj.id ?? "");
+            }
+            return "";
+          })
+          .filter(Boolean) as string[];
+        if (!cancelled && normalized.length) setPaymentMethods(normalized);
+        if (!cancelled && !normalized.length) throw new Error("Empty payment methods");
+      } catch (e) {
+        if (!cancelled) {
+          setMethodsError(e instanceof Error ? e.message : "Failed to load payment methods");
+          setPaymentMethods([...FALLBACK_PAYMENT_METHODS]);
+        }
+      } finally {
+        if (!cancelled) setMethodsLoading(false);
+      }
+    };
+    loadMethods();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filteredPayees = useMemo(() => {
-    if (!payeeQuery.trim()) return MOCK_PAYEES;
+    if (!payeeQuery.trim()) return payees;
     const q = payeeQuery.toLowerCase();
-    return MOCK_PAYEES.filter(
+    return payees.filter(
       (p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)
     );
-  }, [payeeQuery]);
+  }, [payeeQuery, payees]);
 
   const handleSelectPayee = (payee: Payee) => {
     setSelectedPayee(payee);
@@ -195,10 +264,12 @@ export default function MakePaymentPage() {
                       }
                     }}
                     onFocus={() => setDropdownOpen(true)}
-                    placeholder="Search existing payees"
+                    placeholder={payeesLoading ? "Loading payees..." : "Search existing payees"}
+                    disabled={payeesLoading}
                     className="flex-1 bg-transparent outline-none placeholder:text-[#9aa3b2] text-[13px] text-[#0f172a]"
                   />
                   <span className="ml-2 flex items-center gap-2 text-[#6b7280]">
+                    {payeesLoading && <Loader2 size={14} className="animate-spin text-[#64748b]" />}
                     <button
                       type="button"
                       tabIndex={-1}
@@ -355,17 +426,21 @@ export default function MakePaymentPage() {
               />
             </div>
 
-            {/* Payment Methods */}
+            {/* Payment Methods - dynamic via /api/v1/payment-methods?includeOrgOptIn=true */}
             <div className="space-y-2 pt-1">
               <Label className="flex items-center gap-1 text-[12px] font-semibold text-[#0f172a]">
                 Payment Methods <span className="text-[#EF4444]">*</span>
+                {methodsLoading && <span className="ml-2 text-[11px] font-normal text-[#64748b]">Loading…</span>}
               </Label>
+              {methodsError && (
+                <p className="text-[11px] text-[#f59e0b]">{methodsError} — showing fallback options.</p>
+              )}
               <RadioGroup
                 value={paymentMethod}
                 onValueChange={setPaymentMethod}
                 className="flex flex-wrap gap-x-4 gap-y-3"
               >
-                {PAYMENT_METHODS.map((m) => (
+                {paymentMethods.map((m) => (
                   <label key={m} className="flex cursor-pointer items-center gap-1.5 text-[12.5px] text-[#334155]">
                     <RadioGroupItem
                       value={m}
@@ -375,6 +450,9 @@ export default function MakePaymentPage() {
                   </label>
                 ))}
               </RadioGroup>
+              {!methodsLoading && paymentMethods.length === 0 && (
+                <p className="text-[11px] text-muted-foreground">No payment methods available.</p>
+              )}
             </div>
 
             {/* Submit */}
