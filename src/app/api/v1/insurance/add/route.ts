@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth0 } from "@/lib/auth0";
 
-// Proxies to juice-pro (card-provisioning-service) instead of mock.
-// Client should call juiceFetch("/v1/insurance/invite", { method: "POST", body: JSON.stringify(payload) })
-// which hits /api/v1/insurance/invite locally and is forwarded here to the upstream Juice API.
 const JUICE_API_URL =
-  process.env.JUICE_API_URL || process.env.NEXT_PUBLIC_JUICE_API_URL || "http://localhost:3000";
+  process.env.JUICE_API_URL ||
+  process.env.JUICE_PRO_API_URL ||
+  process.env.NEXT_PUBLIC_JUICE_API_URL ||
+  "http://localhost:3000";
 
 const CSRF_HEADER_NAME = "X-CSRF-Token";
 
@@ -34,14 +35,36 @@ async function fetchCsrfToken(cookie: string | null): Promise<string | null> {
 
 export async function POST(request: NextRequest) {
   try {
-    const rawBody = await request.text();
-    const target = `${JUICE_API_URL.replace(/\/$/, "")}/api/v1/insurance/invite`;
+    const target = `${JUICE_API_URL.replace(/\/$/, "")}/api/v1/insurance/add`;
+
+    // Read body via clone BEFORE auth to avoid "disturbed or locked" (auth may read request)
+    let rawBody = "";
+    try {
+      rawBody = await request.clone().text();
+    } catch {
+      rawBody = "";
+    }
+
+    // 1. Require Auth0 session - same as cardholder route
+    const session = await auth0.getSession(request);
+    if (!session?.user) {
+      return NextResponse.json(
+        { status: "error", code: 401, message: "Authentication required" },
+        { status: 401 }
+      );
+    }
 
     const cookie = request.headers.get("cookie");
+
+    // 2. Mint a CSRF token bound to this session's cookie before calling juice-pro
     const csrfToken = await fetchCsrfToken(cookie);
     if (!csrfToken) {
       return NextResponse.json(
-        { status: "error", code: 502, message: "Unable to obtain CSRF token from Juice API" },
+        {
+          success: false,
+          error: { code: "CSRF_TOKEN_UNAVAILABLE", message: "Unable to obtain CSRF token from Juice API" },
+          meta: { timestamp: new Date().toISOString(), requestId: `local-${Date.now()}` },
+        },
         { status: 502 }
       );
     }
@@ -51,6 +74,7 @@ export async function POST(request: NextRequest) {
       [CSRF_HEADER_NAME]: csrfToken,
     };
     if (cookie) headers["cookie"] = cookie;
+    // Forward original authorization if present (harmless if juice-pro ignores it)
     const authorization = request.headers.get("authorization");
     if (authorization) headers["authorization"] = authorization;
 
@@ -58,6 +82,11 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers,
       body: rawBody || undefined,
+      cache: "no-store",
+
+
+
+
     });
 
     const text = await upstream.text();
@@ -84,7 +113,7 @@ export async function POST(request: NextRequest) {
       {
         status: "error",
         code: 500,
-        message: error instanceof Error ? error.message : "Failed to proxy invite to Juice",
+        message: error instanceof Error ? error.message : "Failed to proxy insurance add to Juice",
       },
       { status: 500 }
     );

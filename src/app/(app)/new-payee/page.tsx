@@ -155,7 +155,7 @@ export default function NewPayeePage() {
         clearTimeout(redirectTimerRef.current);
         redirectTimerRef.current = null;
       }
-      const redirectPath = "/make-payment";
+      const redirectPath = "/insurance/add";
       redirectTimerRef.current = setTimeout(() => {
         if (rpid) router.push(`${redirectPath}?rpid=${encodeURIComponent(rpid)}`);
         else router.push(redirectPath);
