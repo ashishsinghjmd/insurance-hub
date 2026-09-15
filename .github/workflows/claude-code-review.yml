@@ -1,0 +1,183 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened]
+
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull Request number to review"
+        required: true
+        type: string
+
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude-review:
+    if: |
+      (github.event_name == 'pull_request' && github.event.action == 'opened') ||
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/claude-review'))
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      actions: read
+      id-token: write
+
+    steps:
+      - name: Set PR number
+        id: pr
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          case "$EVENT_NAME" in
+            workflow_dispatch) number="$INPUT_PR_NUMBER" ;;
+            issue_comment)     number="$ISSUE_NUMBER" ;;
+            *)                 number="$PULL_REQUEST_NUMBER" ;;
+          esac
+          case "$number" in
+            ''|*[!0-9]*)
+              echo "::error::Refusing to continue: PR number '$number' is not a positive integer."
+              exit 1
+              ;;
+          esac
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'issue_comment') && format('refs/pull/{0}/merge', steps.pr.outputs.number) || '' }}
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          track_progress: true
+
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,mcp__sequential-thinking__sequentialthinking"
+
+          prompt: |
+            You are an expert code reviewer for **insurance-hub**, a Next.js 16 application
+            built with React 19, TypeScript, Tailwind CSS v4, and Vitest.
+
+            Follow SOLID, DRY, YAGNI and KISS, and best practices for Next.js, TypeScript and
+            React.
+
+            **IMPORTANT CONSTRAINTS**:
+            - You are running in GitHub Actions, NOT a local development environment
+            - The `gh` CLI is NOT available - do NOT attempt to use it
+            - Use ONLY the `mcp__github_inline_comment__create_inline_comment` tool to comment on
+              specific lines
+            - Review ONLY the files changed in this pull request
+
+            ## Repository shape
+            A Next.js 16 application:
+            - `src/app/` — App Router pages and layouts
+            - `src/components/` — Reusable React components (Radix UI + Tailwind)
+            - `src/lib/` — Utility functions and shared logic
+            - `src/test/` — Vitest test files
+            - `vitest.config.ts` — Test configuration
+
+            ## Critical guidelines
+            - ✅ Use Server Components by default; add `'use client'` only when interactivity is needed
+            - ✅ Follow Next.js App Router conventions (layout.tsx, page.tsx, loading.tsx)
+            - ✅ Use TypeScript strict mode — no `any` types
+            - ✅ Use Tailwind CSS utility classes, no inline styles
+            - ✅ Shared UI components use Radix UI primitives with class-variance-authority
+            - ✅ Forms use react-hook-form with zod validation
+            - ❌ Never commit secrets, API keys, or credentials
+            - ❌ Never break existing route structure or API endpoints
+
+            ## Failure modes to check for first
+            1. **Server/Client component boundary violations** — data fetching in client components,
+               hooks in server components
+            2. **Type safety issues** — `any` types, missing error handling, untyped API responses
+            3. **Accessibility regressions** — missing ARIA labels, poor keyboard navigation
+            4. **Performance issues** — unnecessary re-renders, missing memoization, large bundle
+               imports
+            5. **Security vulnerabilities** — XSS, CSRF, insecure data handling
+
+            ## Review checklist
+            ### Correctness & architecture
+            - [ ] App Router conventions followed (layouts, pages, loading states)
+            - [ ] Server/Client component boundary correct
+            - [ ] Data fetching patterns appropriate (RSC vs client-side)
+            - [ ] No circular dependencies
+
+            ### TypeScript
+            - [ ] No `any` types in new code
+            - [ ] Proper error handling with typed errors
+            - [ ] Props interfaces defined for components
+
+            ### React
+            - [ ] Proper hook usage (dependencies, cleanup)
+            - [ ] No unnecessary re-renders
+            - [ ] Key props on list items
+            - [ ] Proper event handler patterns
+
+            ### Styling
+            - [ ] Tailwind utility classes used consistently
+            - [ ] No inline styles
+            - [ ] Responsive design considerations
+            - [ ] Dark mode support via next-themes
+
+            ### Accessibility
+            - [ ] ARIA labels on interactive elements
+            - [ ] Semantic HTML used
+            - [ ] Keyboard navigation support
+            - [ ] Color contrast considerations
+
+            ### Security
+            - [ ] No secrets or credentials committed
+            - [ ] Auth0 integration properly handled
+            - [ ] Input validation with zod
+            - [ ] No XSS vulnerabilities
+
+            ### Testing
+            - [ ] New features have corresponding tests
+            - [ ] Edge cases covered
+            - [ ] Error states tested
+
+            ## Output format
+
+            ### Summary
+            - PR #${{ steps.pr.outputs.number }}
+            - Changed files: [count]
+            - Lines: +[add] -[del]
+
+            ### Critical Issues 🚨
+            [Blocking - must be fixed before merge]
+
+            ### Major Concerns ⚠️
+            [Should be addressed]
+
+            ### Minor Issues 💡
+            [Suggestions and nitpicks]
+
+            ### Positive Highlights ✅
+
+            ### Test Coverage 🧪
+            [Per changed file. Explicitly name anything covered by no test at all.]
+
+            ### Security Assessment 🔒
+
+            ### Final Recommendation
+            - [ ] APPROVE / [ ] REQUEST CHANGES / [ ] COMMENT
+
+            **Context**: This is PR #${{ steps.pr.outputs.number }}.
+            ${{ github.event_name == 'issue_comment' && 'Review requested via comment.' || '' }}
+            ${{ github.event_name == 'workflow_dispatch' && 'Review manually triggered.' || '' }}
+
+          use_sticky_comment: ${{ github.event_name != 'pull_request' }}
