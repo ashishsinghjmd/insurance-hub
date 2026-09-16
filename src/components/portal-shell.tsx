@@ -3,11 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Activity,
   AlertCircle,
   CreditCard,
-  FileText,
   LayoutDashboard,
+  List,
   LogOut,
   Menu,
   ShieldCheck,
@@ -43,12 +42,13 @@ export { Badge, Label, Skeleton };
 
 const baseNav = [
   { label: "Overview", path: "/overview", icon: LayoutDashboard, group: "Main" },
-  { label: "Policies", path: "/policies", icon: FileText, group: "Main" },
-  { label: "Claims", path: "/claims", icon: Activity, group: "Main" },
+  // { label: "Policies", path: "/policies", icon: FileText, group: "Main" },
+  // { label: "Claims", path: "/claims", icon: Activity, group: "Main" },
+  { label: "Payment List", path: "/insurance/list", icon: List, group: "Payments" },
   { label: "Make Payment", path: "/insurance/add", icon: CreditCard, group: "Payments" },
   { label: "New Payee", path: "/new-payee", icon: UserPlus, group: "Payee" },
-  { label: "New Policy", path: "/policies/new", icon: UserPlus, group: "Actions" },
-  { label: "New Claim", path: "/claims/new", icon: ShieldCheck, group: "Actions" },
+  // { label: "New Policy", path: "/policies/new", icon: UserPlus, group: "Actions" },
+  // { label: "New Claim", path: "/claims/new", icon: ShieldCheck, group: "Actions" },
 ];
 
 const adminNav = [
@@ -56,11 +56,11 @@ const adminNav = [
 ];
 
 function useActiveGroup() {
-  const groups = ["Main", "Payments", "Payee", "Actions", "Admin"];
+  const groups = ["Main", "Payments", "Payee", "Admin"];
   return groups;
 }
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export function PortalShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const path = usePathname();
   const [mobile, setMobile] = useState(false);
@@ -142,6 +142,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="portal-user-card">
             <div className="portal-user-avatar">
               {user?.picture ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={user.picture} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
               ) : (
                 role === "Admin" ? "AD" : "U"
@@ -151,9 +152,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <div className="portal-user-name">
                 {user?.name ?? (role === "Admin" ? "Admin User" : "User")}
               </div>
-              <div className="portal-user-role">
-                <span className="portal-status-dot" /> {role}
-              </div>
+            
             </div>
           </div>
           <a href="/auth/logout" className="portal-signout">
@@ -183,6 +182,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+// Backwards-compat alias – prefer PortalShell
+export const Shell = PortalShell;
 
 function NavItem({
   label,

@@ -40,7 +40,7 @@ interface ClaimFormFieldProps<
   TName extends Path<TFieldValues> = Path<TFieldValues>
 > {
   field: FormFieldConfig;
-  control: Control<any>;
+  control: Control<TFieldValues>;
   name: TName;
   error?: string;
   disabled?: boolean;
