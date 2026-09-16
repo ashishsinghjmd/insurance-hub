@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Loader2, Pencil, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Notice } from "@/components/shell";
+import { Notice } from "@/components/portal-shell";
 import { juiceFetch } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -57,16 +57,16 @@ function ConfirmInner() {
           try {
             const res = await juiceFetch(`/v1/insurance/approval/${encodeURIComponent(token)}`, { method: "GET" });
             if (res.ok) {
-              const json: any = await res.json();
-              const raw: any = json?.data ?? json;
+              const json = (await res.json()) as Record<string, unknown>;
+              const raw = ((json as { data?: unknown }).data ?? json) as Record<string, unknown>;
               const normalized: PaymentOverview = {
-                payeeName: raw?.payeeName ?? raw?.payee_name ?? MOCK_PAYMENT.payeeName,
-                paymentTitle: raw?.paymentTitle ?? raw?.payment_title ?? MOCK_PAYMENT.paymentTitle,
-                email: raw?.email ?? MOCK_PAYMENT.email,
-                mobilePhone: raw?.mobilePhone ?? raw?.mobile_phone ?? MOCK_PAYMENT.mobilePhone,
-                referenceNumber: raw?.referenceNumber ?? raw?.reference_number ?? MOCK_PAYMENT.referenceNumber,
+                payeeName: String(raw?.payeeName ?? raw?.payee_name ?? MOCK_PAYMENT.payeeName),
+                paymentTitle: String(raw?.paymentTitle ?? raw?.payment_title ?? MOCK_PAYMENT.paymentTitle),
+                email: String(raw?.email ?? MOCK_PAYMENT.email),
+                mobilePhone: String(raw?.mobilePhone ?? raw?.mobile_phone ?? MOCK_PAYMENT.mobilePhone),
+                referenceNumber: String(raw?.referenceNumber ?? raw?.reference_number ?? MOCK_PAYMENT.referenceNumber),
                 amount: raw?.amount ? `$${String(raw.amount).replace("$", "")}` : MOCK_PAYMENT.amount,
-                paymentMethods: Array.isArray(raw?.paymentMethods) ? raw.paymentMethods : MOCK_PAYMENT.paymentMethods,
+                paymentMethods: Array.isArray(raw?.paymentMethods) ? (raw.paymentMethods as string[]) : MOCK_PAYMENT.paymentMethods,
               };
               if (!cancelled) {
                 setData(normalized);
@@ -85,20 +85,21 @@ function ConfirmInner() {
           try {
             const cachedRaw = sessionStorage.getItem(`insurance:confirm:${paymentId}`);
             if (cachedRaw) {
-              const cached = JSON.parse(cachedRaw) as any;
+              const cached = JSON.parse(cachedRaw) as Record<string, unknown>;
+              const payeeObj = (cached.payee ?? null) as Record<string, unknown> | null;
               const normalized: PaymentOverview = {
-                payeeName: cached.payeeName ?? cached.payee?.name ?? cached.name ?? MOCK_PAYMENT.payeeName,
-                paymentTitle: cached.paymentTitle ?? MOCK_PAYMENT.paymentTitle,
-                email: cached.payeeEmail ?? cached.email ?? cached.payee?.email ?? MOCK_PAYMENT.email,
+                payeeName: String(cached.payeeName ?? payeeObj?.name ?? cached.name ?? MOCK_PAYMENT.payeeName),
+                paymentTitle: String(cached.paymentTitle ?? MOCK_PAYMENT.paymentTitle),
+                email: String(cached.payeeEmail ?? cached.email ?? payeeObj?.email ?? MOCK_PAYMENT.email),
                 mobilePhone: cached.payeePhone
                   ? `+1 (${String(cached.payeePhone).slice(0, 3)}) ${String(cached.payeePhone).slice(3, 6)}-${String(cached.payeePhone).slice(6)}`
                   : cached.phone
                     ? `+1 (${String(cached.phone).slice(0, 3)}) ${String(cached.phone).slice(3, 6)}-${String(cached.phone).slice(6)}`
                     : MOCK_PAYMENT.mobilePhone,
-                referenceNumber: cached.referenceNumber ?? MOCK_PAYMENT.referenceNumber,
+                referenceNumber: String(cached.referenceNumber ?? MOCK_PAYMENT.referenceNumber),
                 amount: cached.amount != null ? `$${Number(cached.amount).toFixed(2)}` : MOCK_PAYMENT.amount,
                 paymentMethods: Array.isArray(cached.paymentMethods)
-                  ? cached.paymentMethods.map((m: string) => (m === "virtual-card" ? "Virtual Card" : String(m)))
+                  ? (cached.paymentMethods as unknown[]).map((m: unknown) => (m === "virtual-card" ? "Virtual Card" : String(m)))
                   : cached.paymentMethod
                     ? [String(cached.paymentMethod).toLowerCase() === "virtual-card" ? "Virtual Card" : String(cached.paymentMethod)]
                     : MOCK_PAYMENT.paymentMethods,
@@ -127,20 +128,20 @@ function ConfirmInner() {
             }
           }
           if (!res.ok) throw new Error(await res.text());
-          const json = await res.json();
+          const json = (await res.json()) as Record<string, unknown>;
           // normalize shapes: {data:{...}} or direct
-          const raw: any = json?.data ?? json;
+          const raw = ((json as { data?: unknown }).data ?? json) as Record<string, unknown>;
           const normalized: PaymentOverview = {
-            payeeName: raw?.payeeName ?? raw?.payee_name ?? raw?.full_name ?? raw?.name ?? MOCK_PAYMENT.payeeName,
-            paymentTitle: raw?.paymentTitle ?? raw?.payment_title ?? raw?.title ?? MOCK_PAYMENT.paymentTitle,
-            email: raw?.email ?? MOCK_PAYMENT.email,
-            mobilePhone: raw?.mobilePhone ?? raw?.mobile_phone ?? raw?.phone ?? MOCK_PAYMENT.mobilePhone,
-            referenceNumber: raw?.referenceNumber ?? raw?.reference_number ?? raw?.ref ?? MOCK_PAYMENT.referenceNumber,
+            payeeName: String(raw?.payeeName ?? raw?.payee_name ?? raw?.full_name ?? raw?.name ?? MOCK_PAYMENT.payeeName),
+            paymentTitle: String(raw?.paymentTitle ?? raw?.payment_title ?? raw?.title ?? MOCK_PAYMENT.paymentTitle),
+            email: String(raw?.email ?? MOCK_PAYMENT.email),
+            mobilePhone: String(raw?.mobilePhone ?? raw?.mobile_phone ?? raw?.phone ?? MOCK_PAYMENT.mobilePhone),
+            referenceNumber: String(raw?.referenceNumber ?? raw?.reference_number ?? raw?.ref ?? MOCK_PAYMENT.referenceNumber),
             amount: raw?.amount ? `$${String(raw.amount).replace("$", "")}` : MOCK_PAYMENT.amount,
             paymentMethods: Array.isArray(raw?.paymentMethods)
-              ? raw.paymentMethods
+              ? (raw.paymentMethods as string[])
               : Array.isArray(raw?.methods)
-                ? raw.methods
+                ? (raw.methods as string[])
                 : raw?.paymentMethod
                   ? [String(raw.paymentMethod)]
                   : MOCK_PAYMENT.paymentMethods,
@@ -153,11 +154,10 @@ function ConfirmInner() {
         } else {
           if (!cancelled) setData(MOCK_PAYMENT);
         }
-      } catch (e) {
+      } catch {
         // keep mock on failure but surface error if not 404
         if (!cancelled) {
           // silent fallback to mock - uncomment to show error
-          // setError(e instanceof Error ? e.message : "Failed to load payment");
           setData(MOCK_PAYMENT);
         }
       } finally {

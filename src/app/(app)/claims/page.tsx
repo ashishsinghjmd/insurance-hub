@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, FilePlus2, Search } from "lucide-react";
 import Link from "next/link";
-import { Button, ErrorState, Head, Loading, Tag } from "@/components/shell";
+import { Button, ErrorState, Head, Loading, Tag } from "@/components/portal-shell";
 import { Input } from "@/components/ui/input";
 
 type Claim = {

@@ -3,7 +3,7 @@
 import { ArrowLeft, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button, FormRow, Head, Notice } from "@/components/shell";
+import { Button, FormRow, Head, Notice } from "@/components/portal-shell";
 import { Input } from "@/components/ui/input";
 
 import {

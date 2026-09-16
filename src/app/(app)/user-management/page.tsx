@@ -1,6 +1,6 @@
 "use client";
 
-import { Head, Tag } from "@/components/shell";
+import { Head, Tag } from "@/components/portal-shell";
 import { RoleGuard } from "@/components/role-guard";
 import { useRoles } from "@/hooks/use-role";
 import { Users, ShieldCheck, Activity, FileText } from "lucide-react";

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState, useRef } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +26,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Notice } from "@/components/shell";
+import { Notice } from "@/components/portal-shell";
 import { juiceFetch } from "@/lib/api";
 
 type Payee = {
@@ -37,6 +37,11 @@ type Payee = {
   address?: string;
   cardStatus?: string;
   dateOfBirth?: string;
+};
+
+type PaymentMethodOption = {
+  label: string;
+  value: string;
 };
 
 
@@ -118,6 +123,14 @@ function getApiErrorMessage(raw: string, fallback = "Request failed"): string {
   return trimmed;
 }
 
+function normalizeMethodValue(s: string): string {
+  return String(s).toLowerCase().trim().replace(/[\s_]+/g, "-");
+}
+
+function methodMatches(a: string, b: string): boolean {
+  return normalizeMethodValue(a) === normalizeMethodValue(b);
+}
+
 function MakePaymentInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -133,12 +146,12 @@ function MakePaymentInner() {
   const [mobilePhone, setMobilePhone] = useState("");
   const [amount, setAmount] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<string>("");
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<string[]>([]);
   const [newPayeeOpen, setNewPayeeOpen] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
   const [methodsLoading, setMethodsLoading] = useState(true);
   const [methodsError, setMethodsError] = useState<string | null>(null);
   const [isSubmitSuccess, setIsSubmitSuccess] = useState(false);
@@ -159,7 +172,7 @@ function MakePaymentInner() {
   const [payeesLoading, setPayeesLoading] = useState(true);
   const [payeesError, setPayeesError] = useState<string | null>(null);
 
-  const loadPayees = async (force = false) => {
+  const loadPayees = useCallback(async (force = false) => {
     setPayeesLoading(true);
     setPayeesError(null);
     try {
@@ -179,35 +192,38 @@ function MakePaymentInner() {
       }
       const res = await juiceFetch("/v1/insurance/cardholder");
       if (!res.ok) throw new Error(await res.text());
-      const body = await res.json();
-      const rawList: any[] = Array.isArray(body?.data?.payees) ? body.data.payees : Array.isArray(body?.data) ? body.data : [];
+      const body = (await res.json()) as Record<string, unknown>;
+      const dataField = (body as { data?: unknown }).data as Record<string, unknown> | unknown[] | undefined;
+      const payeesField = dataField && typeof dataField === "object" && !Array.isArray(dataField) ? (dataField as Record<string, unknown>).payees : undefined;
+      const rawList: unknown[] = Array.isArray(payeesField) ? (payeesField as unknown[]) : Array.isArray(dataField) ? (dataField as unknown[]) : [];
       const mapped: Payee[] = rawList
-        .map((ch: any) => {
+        .map((ch: unknown) => {
+          const rec = ch as Record<string, unknown>;
           // If already normalized from cardholder proxy (has id+name), use directly
-          if (ch.id && ch.name && typeof ch.name === "string" && String(ch.name).trim() && String(ch.name).trim() !== "Unknown") {
+          if (rec.id && rec.name && typeof rec.name === "string" && String(rec.name).trim() && String(rec.name).trim() !== "Unknown") {
             return {
-              id: String(ch.id).trim(),
-              name: String(ch.name).trim(),
-              email: String(ch.email ?? ch.payeeEmail ?? ""),
-              phone: String(ch.phone ?? ch.mobile_phone ?? ch.mobilePhone ?? ch.payeePhone ?? ""),
-              address: ch.address ? String(ch.address) : undefined,
-              cardStatus: String(ch.cardStatus ?? ch.card_status ?? ch.status ?? "ACT"),
-              dateOfBirth: toYMD(String(ch.dateOfBirth ?? ch.date_of_birth ?? ch.dob ?? ch.birthDate ?? "2008-01-16")),
+              id: String(rec.id).trim(),
+              name: String(rec.name).trim(),
+              email: String(rec.email ?? rec.payeeEmail ?? ""),
+              phone: String(rec.phone ?? rec.mobile_phone ?? rec.mobilePhone ?? rec.payeePhone ?? ""),
+              address: rec.address ? String(rec.address) : undefined,
+              cardStatus: String(rec.cardStatus ?? rec.card_status ?? rec.status ?? "ACT"),
+              dateOfBirth: toYMD(String(rec.dateOfBirth ?? rec.date_of_birth ?? rec.dob ?? rec.birthDate ?? "2008-01-16")),
             } as Payee;
           }
-          const rawId = ch.rpid ?? ch.rpid_ ?? ch.id ?? ch.payeeId;
+          const rawId = rec.rpid ?? rec.rpid_ ?? rec.id ?? rec.payeeId;
           const rpid = rawId !== undefined && rawId !== null ? String(rawId).trim() : "";
           if (!rpid) return null;
-          const nameRaw = String(ch.payeeName ?? ch.full_name ?? ch.fullName ?? ch.name ?? [ch.first_name ?? ch.firstName, ch.last_name ?? ch.lastName].filter(Boolean).join(" ") ?? "").trim();
+          const nameRaw = String(rec.payeeName ?? rec.full_name ?? rec.fullName ?? rec.name ?? [rec.first_name ?? rec.firstName, rec.last_name ?? rec.lastName].filter(Boolean).join(" ") ?? "").trim();
           const name = nameRaw && nameRaw !== "Unknown" ? nameRaw : `Payee ${rpid}`;
-          const email = String(ch.email ?? ch.payeeEmail ?? "");
-          const phone = String(ch.phone ?? ch.mobile_phone ?? ch.mobilePhone ?? ch.payeePhone ?? "");
+          const email = String(rec.email ?? rec.payeeEmail ?? "");
+          const phone = String(rec.phone ?? rec.mobile_phone ?? rec.mobilePhone ?? rec.payeePhone ?? "");
           const addr =
             String(
-              ch.address ??
-                ch.addressLine1 ??
-                ch.payeeAddress ??
-                ([ch.street, ch.city, ch.state, ch.zip].filter(Boolean).join(", ") || "")
+              rec.address ??
+                rec.addressLine1 ??
+                rec.payeeAddress ??
+                ([rec.street, rec.city, rec.state, rec.zip].filter(Boolean).join(", ") || "")
             ).trim() || undefined;
           return {
             id: rpid,
@@ -215,8 +231,8 @@ function MakePaymentInner() {
             email,
             phone,
             address: addr,
-            cardStatus: String(ch.cardStatus ?? ch.card_status ?? ch.status ?? "ACT"),
-            dateOfBirth: toYMD(String(ch.dateOfBirth ?? ch.date_of_birth ?? ch.dob ?? ch.birthDate ?? "2008-01-16")),
+            cardStatus: String(rec.cardStatus ?? rec.card_status ?? rec.status ?? "ACT"),
+            dateOfBirth: toYMD(String(rec.dateOfBirth ?? rec.date_of_birth ?? rec.dob ?? rec.birthDate ?? "2008-01-16")),
           } as Payee;
         })
         .filter(Boolean) as Payee[];
@@ -228,18 +244,43 @@ function MakePaymentInner() {
         throw new Error("Empty payees response");
       }
     } catch (err: unknown) {
-      setPayeesError(err instanceof Error ? err.message : "Failed to load payees from Juice");
+      const rawMsg = err instanceof Error ? err.message : "";
+      setPayeesError(getApiErrorMessage(rawMsg, "Failed to load payees from Juice"));
       const cached = readCache<Payee[]>(PAYEES_CACHE_KEY, PAYEES_CACHE_TTL_MS);
       if (cached && cached.length) setPayees(cached);
       else setPayees([]);
     } finally {
       setPayeesLoading(false);
     }
-  };
+  }, []);
+
+  const handleSelectPayee = useCallback((payee: Payee) => {
+    setSelectedPayee(payee);
+    setPayeeQuery(payee.name);
+    setEmail(payee.email);
+    setMobilePhone(payee.phone);
+    setCurrentRpid(payee.id.replace(/\D/g, ""));
+    setCurrentCardStatus(payee.cardStatus ?? "ACT");
+    setCurrentAddress(payee.address ?? "2432 Streamside Dr, Batavia, OH, 45103");
+    setCurrentDateOfBirth(toYMD(payee.dateOfBirth ?? "2008-01-16"));
+    setDropdownOpen(false);
+  }, []);
+
+  const handleClearPayee = useCallback(() => {
+    setSelectedPayee(null);
+    setPayeeQuery("");
+    setEmail("");
+    setMobilePhone("");
+    setCurrentRpid("");
+    setCurrentCardStatus("ACT");
+    setCurrentAddress("2432 Streamside Dr, Batavia, OH, 45103");
+    setCurrentDateOfBirth("2008-01-16");
+  }, []);
 
   useEffect(() => {
-    loadPayees();
-  }, []);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadPayees();
+  }, [loadPayees]);
 
   useEffect(() => {
     let cancelled = false;
@@ -247,7 +288,7 @@ function MakePaymentInner() {
       setMethodsLoading(true);
       setMethodsError(null);
       try {
-        const cached = readCache<string[]>(METHODS_CACHE_KEY, METHODS_CACHE_TTL_MS);
+        const cached = readCache<PaymentMethodOption[]>(METHODS_CACHE_KEY, METHODS_CACHE_TTL_MS);
         if (cached && cached.length && !cancelled) {
           setPaymentMethods(cached);
           setMethodsLoading(false);
@@ -267,16 +308,24 @@ function MakePaymentInner() {
           raw = (raw as { methods: unknown }).methods;
         }
         const arr = Array.isArray(raw) ? raw : [];
-        const normalized = arr
-          .map((item) => {
-            if (typeof item === "string") return item;
+        const normalized: PaymentMethodOption[] = arr
+          .map((item): PaymentMethodOption | null => {
+            if (typeof item === "string") {
+              const v = item.trim();
+              if (!v) return null;
+              return { label: v, value: v };
+            }
             if (item && typeof item === "object") {
               const obj = item as Record<string, unknown>;
-              return String(obj.label ?? obj.name ?? obj.value ?? obj.code ?? obj.id ?? "");
+              const label = String(obj.label ?? obj.name ?? obj.displayName ?? obj.title ?? obj.text ?? obj.value ?? obj.code ?? obj.id ?? "").trim();
+              const valueRaw = obj.value ?? obj.code ?? obj.id ?? obj.key ?? obj.slug ?? label;
+              const value = String(valueRaw ?? "").trim();
+              if (!label && !value) return null;
+              return { label: label || value, value: value || label };
             }
-            return "";
+            return null;
           })
-          .filter(Boolean) as string[];
+          .filter((v): v is PaymentMethodOption => Boolean(v));
         if (!cancelled && normalized.length) {
           setPaymentMethods(normalized);
           writeCache(METHODS_CACHE_KEY, normalized);
@@ -284,8 +333,9 @@ function MakePaymentInner() {
         if (!cancelled && !normalized.length) throw new Error("Empty payment methods");
       } catch (e) {
         if (!cancelled) {
-          setMethodsError(e instanceof Error ? e.message : "Failed to load payment methods from Juice");
-          const cached = readCache<string[]>(METHODS_CACHE_KEY, METHODS_CACHE_TTL_MS);
+          const rawMsg = e instanceof Error ? e.message : "";
+          setMethodsError(getApiErrorMessage(rawMsg, "Failed to load payment methods from Juice"));
+          const cached = readCache<PaymentMethodOption[]>(METHODS_CACHE_KEY, METHODS_CACHE_TTL_MS);
           if (cached && cached.length) setPaymentMethods(cached);
           else setPaymentMethods([]);
         }
@@ -316,36 +366,84 @@ function MakePaymentInner() {
       setError(null);
       try {
         const decoded = decodeURIComponent(entityParam);
-        // Try confirm endpoint first, fallback to payment by id
-        let res = await juiceFetch(`/v1/insurance/confirm?payment=${encodeURIComponent(decoded)}`, { method: "GET" });
+        // When route is /insurance/add?payment=1805, fetch by id: GET /api/v1/insurance/1805 (via juiceFetch /v1/insurance/:id)
+        let res = await juiceFetch(`/v1/insurance/${encodeURIComponent(decoded)}`, { method: "GET" });
         if (!res.ok) {
-          res = await juiceFetch(`/v1/insurance/payment/${encodeURIComponent(decoded)}`, { method: "GET" });
+          // fallback to legacy confirm/payment endpoints
+          res = await juiceFetch(`/v1/insurance/confirm?payment=${encodeURIComponent(decoded)}`, { method: "GET" });
+          if (!res.ok) {
+            res = await juiceFetch(`/v1/insurance/payment/${encodeURIComponent(decoded)}`, { method: "GET" });
+          }
         }
         if (!res.ok) throw new Error(await res.text());
-        const json: any = await res.json();
-        const data = json?.data ?? json;
+        const json = (await res.json()) as Record<string, unknown>;
+        const rawDataField = (json as { data?: unknown }).data;
+        const data = (rawDataField ?? json) as Record<string, unknown>;
         if (data && !cancelled) {
-          const payeeName = String(data.payeeName ?? data.payee_name ?? data.full_name ?? "");
-          const rpid = String(data.rpid ?? data.rpid_ ?? data.id ?? decoded).replace(/\D/g, "");
-          setPaymentTitle(String(data.paymentTitle ?? data.payment_title ?? ""));
-          setAmount(String(data.amount ?? "0.01").replace(/[^0-9.]/g, ""));
-          setReferenceNumber(String(data.referenceNumber ?? data.reference_number ?? ""));
-          const methods = Array.isArray(data.paymentMethods) ? data.paymentMethods : data.paymentMethod ? [String(data.paymentMethod)] : [];
-          if (methods.length) setPaymentMethod(String(methods[0]).toLowerCase() === "virtual-card" ? methods[0] : methods[0]);
+          // Robustly resolve effective data – handle nested {data:{payment:{...}}} or {data:{data:{...}}}
+          let effective = data as Record<string, unknown>;
+          // If data has no payment fields but contains nested payment object, unwrap
+          const nestedPayment = (effective.payment ?? effective.Payment ?? effective.insurance) as unknown;
+          if (nestedPayment && typeof nestedPayment === "object" && !Array.isArray(nestedPayment)) {
+            const np = nestedPayment as Record<string, unknown>;
+            // prefer nested if it contains paymentMethods / title
+            if (np.paymentMethods || np.payment_methods || np.paymentMethod || np.methods) {
+              effective = np;
+            }
+          }
+          const nestedData = (effective.data ?? effective.Data) as unknown;
+          if (nestedData && typeof nestedData === "object" && !Array.isArray(nestedData)) {
+            const nd = nestedData as Record<string, unknown>;
+            if (nd.paymentMethods || nd.payment_methods || nd.paymentMethod) {
+              effective = { ...effective, ...nd };
+            }
+          }
+
+          const payeeName = String(effective.payeeName ?? effective.payee_name ?? effective.full_name ?? "");
+          const rpid = String(effective.rpid ?? effective.rpid_ ?? effective.id ?? decoded).replace(/\D/g, "");
+          setPaymentTitle(String(effective.paymentTitle ?? effective.payment_title ?? effective.title ?? ""));
+          setAmount(String(effective.amount ?? "0.01").replace(/[^0-9.]/g, ""));
+          setReferenceNumber(String(effective.referenceNumber ?? effective.reference_number ?? effective.reference ?? ""));
+
+          // Extract payment methods – handles array, comma-string, or single value, multiple key variants, nested payment
+          const rawMethods =
+            effective.paymentMethods ??
+            effective.payment_methods ??
+            effective.paymentMethod ??
+            effective.payment_method ??
+            effective.methods ??
+            (nestedPayment && typeof nestedPayment === "object" ? (nestedPayment as Record<string, unknown>).paymentMethods : undefined) ??
+            undefined;
+          let methods: unknown[] = [];
+          if (Array.isArray(rawMethods)) methods = rawMethods;
+          else if (typeof rawMethods === "string" && rawMethods.trim()) {
+            const s = rawMethods.trim();
+            // handle comma-separated like "wire,ach,paypal"
+            if (s.includes(",")) methods = s.split(",").map((p) => p.trim()).filter(Boolean);
+            else methods = [s];
+          } else if (rawMethods !== undefined && rawMethods !== null) {
+            methods = [String(rawMethods)];
+          }
+          // Also handle case where methods are inside nested object already merged above, but fallback: try to split strings that contain comma
+          const flatMethods = methods.flatMap((m) => {
+            if (typeof m === "string" && m.includes(",")) return m.split(",").map((p) => p.trim()).filter(Boolean);
+            return [m];
+          });
+          if (flatMethods.length) setSelectedPaymentMethods(flatMethods.map((m) => String(m).trim()).filter(Boolean));
           // payee will be auto-selected via rpid param or direct
           if (rpid) {
             setCurrentRpid(rpid);
-            setCurrentCardStatus(String(data.cardStatus ?? data.card_status ?? "ACT"));
-            setCurrentAddress(String(data.address ?? ""));
-            setCurrentDateOfBirth(toYMD(String(data.dateOfBirth ?? data.date_of_birth ?? "2008-01-16")));
+            setCurrentCardStatus(String(effective.cardStatus ?? effective.card_status ?? "ACT"));
+            setCurrentAddress(String(effective.address ?? ""));
+            setCurrentDateOfBirth(toYMD(String(effective.dateOfBirth ?? effective.date_of_birth ?? "2008-01-16")));
             // defer payee selection until payees loaded
             const trySelect = () => {
               const match = payees.find((p) => String(p.id).replace(/\D/g, "") === rpid);
               if (match) handleSelectPayee(match);
               else {
                 setPayeeQuery(payeeName || rpid);
-                setEmail(String(data.email ?? ""));
-                setMobilePhone(String(data.mobilePhone ?? data.mobile_phone ?? data.phone ?? ""));
+                setEmail(String(effective.email ?? ""));
+                setMobilePhone(String(effective.mobilePhone ?? effective.mobile_phone ?? effective.phone ?? ""));
               }
             };
             if (payees.length) trySelect();
@@ -353,16 +451,19 @@ function MakePaymentInner() {
           }
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load payment for edit");
+        if (!cancelled) {
+          const rawMsg = err instanceof Error ? err.message : "Failed to load payment for edit";
+          setError(getApiErrorMessage(rawMsg, rawMsg));
+        }
       } finally {
         if (!cancelled) setIsLoadingEntityData(false);
       }
     };
-    fetchEntity();
+    void fetchEntity();
     return () => {
       cancelled = true;
     };
-  }, [entityParam, payees]);
+  }, [entityParam, payees, handleSelectPayee]);
 
   // Handle rpid param auto-select - mirrors HubForm rpidParam logic
   useEffect(() => {
@@ -374,6 +475,7 @@ function MakePaymentInner() {
     prevRpidParamRef.current = rpidParam;
     const match = payees.find((p) => String(p.id).replace(/\D/g, "") === decodedRpid);
     if (match) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentRpid(match.id.replace(/\D/g, ""));
       setCurrentCardStatus(match.cardStatus ?? "ACT");
       setCurrentAddress(match.address ?? "");
@@ -381,11 +483,11 @@ function MakePaymentInner() {
       handleSelectPayee(match);
     } else if (!hasRefreshedForRpid) {
       setHasRefreshedForRpid(true);
-      loadPayees(true);
+      void loadPayees(true);
     } else {
       setError(`Payee with RPID ${decodedRpid} not found. Please select from dropdown.`);
     }
-  }, [rpidParam, payees, isEdit, entityParam, hasRefreshedForRpid]);
+  }, [rpidParam, payees, isEdit, entityParam, hasRefreshedForRpid, handleSelectPayee, loadPayees]);
 
   const filteredPayees = useMemo(() => {
     if (!payeeQuery.trim()) return payees;
@@ -394,29 +496,6 @@ function MakePaymentInner() {
       (p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)
     );
   }, [payeeQuery, payees]);
-
-  const handleSelectPayee = (payee: Payee) => {
-    setSelectedPayee(payee);
-    setPayeeQuery(payee.name);
-    setEmail(payee.email);
-    setMobilePhone(payee.phone);
-    setCurrentRpid(payee.id.replace(/\D/g, ""));
-    setCurrentCardStatus(payee.cardStatus ?? "ACT");
-    setCurrentAddress(payee.address ?? "2432 Streamside Dr, Batavia, OH, 45103");
-    setCurrentDateOfBirth(toYMD(payee.dateOfBirth ?? "2008-01-16"));
-    setDropdownOpen(false);
-  };
-
-  const handleClearPayee = () => {
-    setSelectedPayee(null);
-    setPayeeQuery("");
-    setEmail("");
-    setMobilePhone("");
-    setCurrentRpid("");
-    setCurrentCardStatus("ACT");
-    setCurrentAddress("2432 Streamside Dr, Batavia, OH, 45103");
-    setCurrentDateOfBirth("2008-01-16");
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -438,14 +517,19 @@ function MakePaymentInner() {
       setError("Reference Number is required.");
       return;
     }
-    if (!paymentMethod) {
-      setError("Please select a Payment Method.");
+    if (!selectedPaymentMethods.length) {
+      setError("Please select at least one Payment Method.");
       return;
     }
     setSubmitting(true);
     try {
       const rawRpid = String(selectedPayee?.id ?? payeeQuery.trim()).replace(/\D/g, "") || "9800494982";
-      const slugMethod = paymentMethod.toLowerCase().replace(/\s+/g, "-") || "virtual-card";
+      // Resolve selected labels/values to the canonical API value (label -> value) using normalized match
+      const resolvedMethods = selectedPaymentMethods.map((sm) => {
+        const opt = paymentMethods.find((o) => methodMatches(o.value, sm) || methodMatches(o.label, sm));
+        return opt ? opt.value : sm;
+      });
+      const normalizedMethods = resolvedMethods.length ? resolvedMethods : ["virtual-card"];
       // Transformer - mirrors createPaymentFormTransformer (create vs update)
       const baseData = {
         paymentTitle: paymentTitle.trim(),
@@ -453,7 +537,7 @@ function MakePaymentInner() {
         mobilePhone: mobilePhone.replace(/\D/g, ""),
         amount: Number(amount),
         referenceNumber: referenceNumber.trim(),
-        paymentMethods: [slugMethod],
+        paymentMethods: normalizedMethods,
       };
       const isUpdate = isEdit && !!entityParam;
       const payload = isUpdate
@@ -488,16 +572,16 @@ function MakePaymentInner() {
       }
       let paymentId = isUpdate ? String(entityParam) : "1797";
       try {
-        const body = await res.json();
-        const raw: any = body?.data ?? body;
+        const body = (await res.json()) as Record<string, unknown>;
+        const raw = ((body as { data?: unknown }).data ?? body) as Record<string, unknown>;
         paymentId = String(raw?.paymentId ?? raw?.payment ?? raw?.id ?? raw?.payment_id ?? paymentId);
       } catch {
         // keep default and also cache payload so confirm can show it without API
       }
       // Cache for confirm page (handles both create and update) - use finalPayload with corrected referenceNumber
       try {
-        const baseForCache = (typeof finalPayload !== "undefined" ? finalPayload : payload) as any;
-        const cachePayload = { ...baseForCache, payeeName: baseForCache.payeeName ?? selectedPayee?.name, rpid: baseForCache.rpid ?? rawRpid, paymentId };
+        const baseForCache = (typeof finalPayload !== "undefined" ? finalPayload : payload) as Record<string, unknown>;
+        const cachePayload = { ...baseForCache, payeeName: (baseForCache as Record<string, unknown>).payeeName ?? selectedPayee?.name, rpid: (baseForCache as Record<string, unknown>).rpid ?? rawRpid, paymentId };
         sessionStorage.setItem(`insurance:confirm:${paymentId}`, JSON.stringify(cachePayload));
         sessionStorage.setItem("insurance:last-payment", paymentId);
       } catch {}
@@ -548,8 +632,9 @@ function MakePaymentInner() {
         const errText = await res.text().catch(() => res.statusText);
         throw new Error(getApiErrorMessage(errText, res.statusText || "Failed to create payee"));
       }
-      const body = await res.json().catch(() => ({}));
-      const rpid = String(body?.data?.payeeId ?? body?.data?.rpid ?? body?.rpid ?? Math.floor(9800000000 + Math.random() * 99999999));
+      const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      const dataField = (body as { data?: unknown }).data as Record<string, unknown> | undefined;
+      const rpid = String(dataField?.payeeId ?? dataField?.rpid ?? body?.rpid ?? Math.floor(9800000000 + Math.random() * 99999999));
       const created: Payee = {
         id: rpid.replace(/\D/g, ""),
         name: newPayee.name.trim(),
@@ -561,8 +646,8 @@ function MakePaymentInner() {
       };
       handleSelectPayee(created);
       // refresh payees list from Juice
-      loadPayees(true);
-    } catch (err) {
+      void loadPayees(true);
+    } catch {
       // fallback to local add if Juice fails - still allow selection
       const created: Payee = {
         id: String(Math.floor(9800000000 + Math.random() * 99999999)),
@@ -589,7 +674,7 @@ function MakePaymentInner() {
             <Notice kind="success">
               <span className="flex items-center gap-2">
                 <Check size={14} className="text-[hsl(var(--chart-2))]" />
-                Payment <b>{paymentTitle}</b> for <b>{selectedPayee?.name ?? payeeQuery}</b> of ${Number(amount).toFixed(2)} via {paymentMethod} created successfully. Ref: {referenceNumber}
+                Payment <b>{paymentTitle}</b> for <b>{selectedPayee?.name ?? payeeQuery}</b> of ${Number(amount).toFixed(2)} via {selectedPaymentMethods.map((v) => paymentMethods.find((o) => methodMatches(o.value, v) || methodMatches(o.label, v))?.label ?? v).join(", ") || "—"} created successfully. Ref: {referenceNumber}
               </span>
             </Notice>
           </div>
@@ -661,13 +746,27 @@ function MakePaymentInner() {
                       tabIndex={-1}
                       onClick={(ev) => {
                         ev.stopPropagation();
+                        void loadPayees(true);
+                      }}
+                      className="grid h-6 w-6 place-items-center rounded-full hover:bg-slate-100 transition-colors"
+                      aria-label="Refresh payees"
+                      title="Refresh payees"
+                    >
+                      <RefreshCw size={13} className={`text-[#64748b] ${payeesLoading ? "animate-spin" : ""}`} />
+                    </button>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
                         handleClearPayee();
                         setDropdownOpen(false);
                       }}
                       className="grid h-6 w-6 place-items-center rounded-full hover:bg-slate-100 transition-colors"
                       aria-label="Clear selection"
+                      title="Clear selection"
                     >
-                      <RefreshCw size={13} className="text-[#64748b]" />
+                      <span className="text-[11px] leading-none text-[#64748b]">×</span>
                     </button>
                     <ChevronDown size={14} className={`text-[#64748b] transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
                   </span>
@@ -767,11 +866,8 @@ function MakePaymentInner() {
                   disabled={!!selectedPayee}
                   className={`flex-1 bg-transparent outline-none placeholder:text-[#b8c0cf] text-[13px] ${selectedPayee ? "text-[#334155] cursor-not-allowed" : "text-[#0f172a]"}`}
                   inputMode="tel"
-                />
+                />  
               </div>
-              {selectedPayee && (
-                <p className="text-[11px] text-[#64748b]">Auto-filled from selected payee — clear payee to edit.</p>
-              )}
             </div>
 
             {/* Amount */}
@@ -827,21 +923,31 @@ function MakePaymentInner() {
               {methodsError && (
                 <p className="text-[11px] text-[#ef4444]">{methodsError}</p>
               )}
-              <RadioGroup
-                value={paymentMethod}
-                onValueChange={setPaymentMethod}
-                className="flex flex-wrap gap-x-4 gap-y-3"
-              >
-                {paymentMethods.map((v,k) => (
-                  <label key={k} className="flex cursor-pointer items-center gap-1.5 text-[12.5px] text-[#334155]">
-                    <RadioGroupItem
-                      value={v}
-                      className="h-[16px] w-[16px] border-[#cbd5e1] text-[#017BFD] data-[state=checked]:border-[#017BFD] data-[state=checked]:bg-white"
-                    />
-                    <span className={paymentMethod === v ? "font-semibold text-[#0f172a]" : "font-normal"}>{v}</span>
-                  </label>
-                ))}
-              </RadioGroup>
+              <div className="flex flex-wrap gap-x-4 gap-y-3">
+                {paymentMethods.map((opt, k) => {
+                  const checked = selectedPaymentMethods.some((sm) => methodMatches(sm, opt.value) || methodMatches(sm, opt.label));
+                  return (
+                    <label key={`${opt.value}-${k}`} className="flex cursor-pointer items-center gap-1.5 text-[12.5px] text-[#334155]">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(c) => {
+                          const isChecked = c === true;
+                          setSelectedPaymentMethods((prev) => {
+                            const already = prev.some((sm) => methodMatches(sm, opt.value) || methodMatches(sm, opt.label));
+                            if (isChecked) {
+                              if (already) return prev;
+                              return [...prev, opt.value];
+                            }
+                            return prev.filter((x) => !methodMatches(x, opt.value) && !methodMatches(x, opt.label));
+                          });
+                        }}
+                        className="h-[16px] w-[16px] border-[#cbd5e1] data-[state=checked]:bg-[#017BFD] data-[state=checked]:border-[#017BFD] data-[state=checked]:text-white"
+                      />
+                      <span className={checked ? "font-semibold text-[#0f172a]" : "font-normal"}>{opt.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
               {!methodsLoading && paymentMethods.length === 0 && (
                 <p className="text-[11px] text-muted-foreground">No payment methods available.</p>
               )}

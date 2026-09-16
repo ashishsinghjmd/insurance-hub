@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useUser } from "@auth0/nextjs-auth0";
-import { ArrowRight, FileText, LifeBuoy, ShieldCheck, TrendingUp } from "lucide-react";
-import { Button, Card, Head, Tag } from "@/components/shell";
+import { ArrowRight, FileText, LifeBuoy, List, ShieldCheck, TrendingUp } from "lucide-react";
+import { Button, Card, Head, Tag } from "@/components/portal-shell";
 import { useRoles } from "@/hooks/use-role";
 
 const stats = [
@@ -26,7 +27,10 @@ export default function DashboardPage() {
   const { user, isLoading } = useUser();
   const { role } = useRoles();
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   return (
     <div className="portal-content">
@@ -35,9 +39,16 @@ export default function DashboardPage() {
         title="Policy management at a glance."
         text="Manage policies, track claims, and monitor your portfolio across every customer."
         action={
-          <Button variant="default" onClick={() => {}}>
-            <ShieldCheck size={14} /> New Policy
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link href="/insurance/list">
+              <Button variant="outline">
+                <List size={14} /> Payment List
+              </Button>
+            </Link>
+            <Button variant="default" onClick={() => {}}>
+              <ShieldCheck size={14} /> New Policy
+            </Button>
+          </div>
         }
       />
 
